@@ -120,6 +120,17 @@ def fmt_money(valor):
     return f'{entero.replace(",", ".")},{dec}'
 
 
+def fmt_fecha_hora(valor):
+    """'2026-07-16 14:01:37' -> '16/07/2026 14:01' (formato local)."""
+    texto = str(valor or '')
+    try:
+        fecha, hora = texto.split(' ')
+        a, m, d = fecha.split('-')
+        return f'{d}/{m}/{a} {hora[:5]}'
+    except ValueError:
+        return texto
+
+
 def fmt_cant(valor):
     try:
         v = float(valor or 0)
@@ -240,7 +251,8 @@ def _firmas(ov, solicitud):
             c.drawCentredString(centro, ay0 + 23, ov._recortar(
                 a.get('cargo', ''), mx1 - mx0 - 6, 'Helvetica', 5))
             c.setFont('Helvetica-Oblique', 4.6)
-            c.drawCentredString(centro, ay0 + 15, f'Autorizado digitalmente · {a.get("fecha", "")}')
+            c.drawCentredString(centro, ay0 + 15,
+                                f'Autorizado digitalmente · {fmt_fecha_hora(a.get("fecha"))}')
             if a.get('excedio_tope'):
                 c.setFillColor(ROJO)
                 c.setFont('Helvetica-Bold', 4.2)

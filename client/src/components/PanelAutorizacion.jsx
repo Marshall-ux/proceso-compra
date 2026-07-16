@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LISTAS, fmtMoney } from '../constants.js'
+import { LISTAS, fmtFechaHora, fmtMoney } from '../constants.js'
 import { autorizar } from '../services/api.js'
 
 // Panel de firmas: el proceso exige DOS autorizantes distintos.
@@ -72,7 +72,7 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
                 <>
                   <div className="firma__nombre">{f.nombre}</div>
                   <div className="firma__cargo">{f.cargo}</div>
-                  <div className="firma__fecha">{f.fecha}</div>
+                  <div className="firma__fecha">{fmtFechaHora(f.fecha)}</div>
                   {!!f.excedio_tope && (
                     <div className="badge badge--warning" style={{ marginTop: '0.4rem' }}>
                       Excedió su tope de $ {fmtMoney(f.monto_tope)}

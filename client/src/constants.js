@@ -54,3 +54,9 @@ export const LISTAS = {
 
 export const fmtMoney = (v) =>
   (Number(v) || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+// '2026-07-16 14:01:37' -> '16/07/2026 14:01'
+export const fmtFechaHora = (v) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2})/.exec(String(v || ''))
+  return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}` : String(v || '')
+}
