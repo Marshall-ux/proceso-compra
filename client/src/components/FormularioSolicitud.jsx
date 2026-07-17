@@ -1,7 +1,9 @@
 import {
-  CONCEPTOS, CONDICION_DIAS, CONDICION_PAGO, EMPRESAS, FORMA_PAGO, MARCAS,
-  PROVEEDOR_TIPO, TIPO_ORDEN, fmtMoney,
+  CONCEPTOS, CONDICION_DIAS, CONDICION_PAGO, CRITICIDAD, EMPRESAS, FORMA_PAGO, MARCAS,
+  PROVEEDOR_TIPO, REQUIERE_OC, TIPO_ORDEN, fmtMoney,
 } from '../constants.js'
+import { subirCbu, subirLegajo } from '../services/api.js'
+import AdjuntoUploader from './AdjuntoUploader.jsx'
 import ItemsEditor from './ItemsEditor.jsx'
 import Opciones from './Opciones.jsx'
 
@@ -71,6 +73,38 @@ export default function FormularioSolicitud({ datos, onChange, autocompletados =
             <input type="text" placeholder="Ej: 6 meses" value={datos.duracion_orden || ''} onChange={setInput('duracion_orden')} />
           </div>
         )}
+        <div style={{ marginTop: '0.9rem' }}>
+          <AdjuntoUploader
+            label="Legajo impositivo (PDF)"
+            hint={datos.proveedor_tipo === 'nuevo'
+              ? 'Obligatorio para proveedores nuevos.' : 'Opcional. Lo carga el comprador o el responsable de proveedores.'}
+            accept="application/pdf"
+            nombre={datos.legajo_nombre}
+            onSubir={subirLegajo}
+            onListo={(r) => onChange({ ...datos, legajo_archivo: r.archivo, legajo_nombre: r.nombre })}
+            onQuitar={() => onChange({ ...datos, legajo_archivo: '', legajo_nombre: '' })}
+          />
+        </div>
+      </div>
+
+      <div className="seccion">
+        <div className="seccion__titulo">Prioridad del pago y orden de compra</div>
+        <div className="grid grid--2">
+          <div className="field">
+            <label>Criticidad (qué tan urgente es el pago)</label>
+            <Opciones nombre="criticidad" valor={datos.criticidad} opciones={CRITICIDAD} onChange={set('criticidad')} />
+          </div>
+          <div className="field">
+            <label>¿Requiere orden de compra?</label>
+            <Opciones nombre="requiere_oc" valor={datos.requiere_oc} opciones={REQUIERE_OC} onChange={set('requiere_oc')} />
+          </div>
+        </div>
+        {datos.criticidad === 'otro' && (
+          <div className="field" style={{ marginTop: '0.7rem' }}>
+            <label>Detalle de la criticidad</label>
+            <input type="text" placeholder="Ej: pagar antes de fin de mes" value={datos.criticidad_obs || ''} onChange={setInput('criticidad_obs')} />
+          </div>
+        )}
       </div>
 
       <div className="seccion">
@@ -86,6 +120,17 @@ export default function FormularioSolicitud({ datos, onChange, autocompletados =
 
       <div className="seccion">
         <div className="seccion__titulo">Detalle del servicio o producto</div>
+        {datos.facturas?.length > 0 && (
+          <div className="field__nota" style={{ marginBottom: '0.7rem' }}>
+            Facturas adjuntas: {datos.facturas.map((f) => f.nombre).join(', ')}
+          </div>
+        )}
+        {(datos.items || []).length > 6 && (
+          <div className="alert alert--warning">
+            El formulario oficial tiene 6 renglones y esta orden tiene {(datos.items || []).length}.
+            En el PDF entran los primeros 6; agrupá o resumí los ítems si hace falta que se vean todos.
+          </div>
+        )}
         <ItemsEditor items={datos.items || []} onChange={set('items')} />
         <div className="grid grid--2" style={{ marginTop: '1.1rem' }}>
           <div className={auto('monto_total')}>
@@ -108,9 +153,20 @@ export default function FormularioSolicitud({ datos, onChange, autocompletados =
         <div className="seccion__titulo">Forma de pago</div>
         <Opciones nombre="forma_pago" valor={datos.forma_pago} opciones={FORMA_PAGO} onChange={set('forma_pago')} />
         {datos.forma_pago === 'transferencia' && (
-          <div className={`${auto('cbu')}`} style={{ marginTop: '0.7rem' }}>
-            <label>CBU</label>
-            <input type="text" value={datos.cbu || ''} onChange={setInput('cbu')} />
+          <div className="grid grid--2" style={{ marginTop: '0.7rem' }}>
+            <div className={auto('cbu')}>
+              <label>CBU (número)</label>
+              <input type="text" value={datos.cbu || ''} onChange={setInput('cbu')} />
+            </div>
+            <AdjuntoUploader
+              label="CBU (imagen JPG/PNG)"
+              hint="Podés cargar el número, la imagen, o ambos."
+              accept="image/jpeg,image/png"
+              nombre={datos.cbu_imagen ? 'Imagen cargada' : ''}
+              onSubir={subirCbu}
+              onListo={(r) => onChange({ ...datos, cbu_imagen: r.archivo })}
+              onQuitar={() => onChange({ ...datos, cbu_imagen: '' })}
+            />
           </div>
         )}
       </div>

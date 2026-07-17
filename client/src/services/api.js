@@ -18,11 +18,27 @@ async function pedir(url, opciones = {}) {
   return data
 }
 
-export const extraerFactura = (archivo) => {
+// Sube uno o varios PDF y devuelve una sola orden combinada.
+export const extraerFacturas = (archivos) => {
   const form = new FormData()
-  form.append('archivo', archivo)
+  for (const a of archivos) form.append('archivos', a)
   return pedir('/facturas/extraer', { method: 'POST', body: form })
 }
+
+export const subirCbu = (archivo) => {
+  const form = new FormData()
+  form.append('archivo', archivo)
+  return pedir('/archivos/cbu', { method: 'POST', body: form })
+}
+
+export const subirLegajo = (archivo) => {
+  const form = new FormData()
+  form.append('archivo', archivo)
+  return pedir('/archivos/legajo', { method: 'POST', body: form })
+}
+
+export const blanquearPin = (autorizadoId) =>
+  pedir(`/autorizados/${autorizadoId}/pin`, { method: 'DELETE' })
 
 export const listarSolicitudes = (params = {}) => {
   const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
@@ -61,4 +77,6 @@ export const listarAutorizados = (lista) =>
   pedir(`/autorizados${lista ? `?lista=${lista}` : ''}`)
 
 export const urlPdf = (id) => `${BASE}/solicitudes/${id}/pdf`
-export const urlFactura = (id) => `${BASE}/solicitudes/${id}/factura`
+export const urlFactura = (id, facturaId) => `${BASE}/solicitudes/${id}/facturas/${facturaId}`
+export const urlCbuImagen = (id) => `${BASE}/solicitudes/${id}/cbu-imagen`
+export const urlLegajo = (id) => `${BASE}/solicitudes/${id}/legajo`

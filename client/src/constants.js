@@ -42,6 +42,17 @@ export const CONDICION_PAGO = [
 
 export const CONDICION_DIAS = ['7', '20', '30']
 
+export const CRITICIDAD = [
+  { valor: 'urgente', etiqueta: 'Urgente' },
+  { valor: 'informado', etiqueta: 'Informado en factura' },
+  { valor: 'otro', etiqueta: 'Otro' },
+]
+
+export const REQUIERE_OC = [
+  { valor: 'si', etiqueta: 'Sí' },
+  { valor: 'no', etiqueta: 'No' },
+]
+
 // El formulario tiene 6 renglones en el detalle.
 export const MAX_ITEMS = 6
 

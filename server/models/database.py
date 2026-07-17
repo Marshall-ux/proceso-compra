@@ -42,11 +42,30 @@ CREATE TABLE IF NOT EXISTS solicitudes (
     observaciones       TEXT NOT NULL DEFAULT '',
     solicitado_por      TEXT NOT NULL DEFAULT '',
     estado              TEXT NOT NULL DEFAULT 'pendiente',  -- pendiente | autorizada
+    -- Legacy: factura unica. Se mantiene por compatibilidad; las facturas nuevas
+    -- viven en la tabla 'facturas' (una solicitud puede tener varias).
     factura_nombre      TEXT NOT NULL DEFAULT '',
     factura_archivo     TEXT NOT NULL DEFAULT '',
     factura_numero      TEXT NOT NULL DEFAULT '',
+    -- V2
+    criticidad          TEXT NOT NULL DEFAULT '',   -- urgente | informado | otro
+    criticidad_obs      TEXT NOT NULL DEFAULT '',    -- detalle cuando criticidad = otro
+    requiere_oc         TEXT NOT NULL DEFAULT '',    -- si | no
+    autopack_ok         INTEGER NOT NULL DEFAULT 0,  -- cargado en Autopack (bloquea el Excel)
+    cbu_imagen          TEXT NOT NULL DEFAULT '',    -- archivo JPG del CBU
+    legajo_nombre       TEXT NOT NULL DEFAULT '',
+    legajo_archivo      TEXT NOT NULL DEFAULT '',    -- PDF del legajo impositivo
     created_at          TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     updated_at          TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS facturas (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    solicitud_id  INTEGER NOT NULL REFERENCES solicitudes(id) ON DELETE CASCADE,
+    nombre        TEXT NOT NULL DEFAULT '',   -- nombre original del archivo
+    archivo       TEXT NOT NULL DEFAULT '',   -- nombre guardado en uploads/
+    numero        TEXT NOT NULL DEFAULT '',   -- nro de comprobante leido del PDF
+    orden         INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS items (
@@ -82,14 +101,35 @@ def get_db():
     return conn
 
 
+# Columnas agregadas en V2: para bases que ya existen se suman con ALTER TABLE.
+_COLUMNAS_V2 = {
+    'criticidad': "TEXT NOT NULL DEFAULT ''",
+    'criticidad_obs': "TEXT NOT NULL DEFAULT ''",
+    'requiere_oc': "TEXT NOT NULL DEFAULT ''",
+    'autopack_ok': 'INTEGER NOT NULL DEFAULT 0',
+    'cbu_imagen': "TEXT NOT NULL DEFAULT ''",
+    'legajo_nombre': "TEXT NOT NULL DEFAULT ''",
+    'legajo_archivo': "TEXT NOT NULL DEFAULT ''",
+}
+
+
 def init_db():
     conn = get_db()
     try:
         conn.executescript(SCHEMA)
+        _migrar(conn)
         _seed_autorizados(conn)
         conn.commit()
     finally:
         conn.close()
+
+
+def _migrar(conn):
+    """Agrega a una base preexistente las columnas nuevas que falten."""
+    existentes = {r['name'] for r in conn.execute('PRAGMA table_info(solicitudes)')}
+    for columna, definicion in _COLUMNAS_V2.items():
+        if columna not in existentes:
+            conn.execute(f'ALTER TABLE solicitudes ADD COLUMN {columna} {definicion}')
 
 
 def _seed_autorizados(conn):

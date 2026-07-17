@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { LISTAS, fmtMoney } from '../constants.js'
-import { listarAutorizados } from '../services/api.js'
+import { blanquearPin, listarAutorizados } from '../services/api.js'
 
 // Consulta de las 4 planillas de autorizados (Nissan, Jeep, Kia, Multimarca).
 export default function AutorizadosPage() {
@@ -8,10 +8,18 @@ export default function AutorizadosPage() {
   const [lista, setLista] = useState('')
   const [cargando, setCargando] = useState(true)
 
-  useEffect(() => {
+  const cargar = () => {
     setCargando(true)
     listarAutorizados(lista).then(setAutorizados).finally(() => setCargando(false))
-  }, [lista])
+  }
+
+  useEffect(cargar, [lista])
+
+  const blanquear = async (a) => {
+    if (!confirm(`¿Blanquear el PIN de ${a.nombre}? Va a tener que definir uno nuevo la próxima vez que firme.`)) return
+    await blanquearPin(a.id)
+    cargar()
+  }
 
   return (
     <>
@@ -55,6 +63,7 @@ export default function AutorizadosPage() {
                   <th className="num">Monto autorizado</th>
                   <th>Conceptos</th>
                   <th>PIN</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -75,6 +84,13 @@ export default function AutorizadosPage() {
                       {a.tiene_pin
                         ? <span className="badge badge--success">Activo</span>
                         : <span className="badge badge--muted">Sin definir</span>}
+                    </td>
+                    <td>
+                      {a.tiene_pin && (
+                        <button className="btn btn--danger btn--sm" onClick={() => blanquear(a)}>
+                          Blanquear PIN
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

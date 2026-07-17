@@ -61,3 +61,20 @@ def definir_pin(autorizado_id):
         conn.close()
 
     return jsonify({'ok': True})
+
+
+@bp.route('/autorizados/<int:autorizado_id>/pin', methods=['DELETE'])
+def blanquear_pin(autorizado_id):
+    """Blanqueo de PIN (reset admin): deja al autorizado sin PIN, para que defina uno
+    nuevo la próxima vez que firme. No requiere conocer el PIN actual."""
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT id FROM autorizados WHERE id = ? AND activo = 1',
+                           (autorizado_id,)).fetchone()
+        if not row:
+            return jsonify({'error': 'El autorizado no existe'}), 404
+        conn.execute('UPDATE autorizados SET pin_hash = NULL WHERE id = ?', (autorizado_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'ok': True})

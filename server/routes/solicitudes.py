@@ -25,7 +25,7 @@ def crear():
     errores = svc.validar(data)
     if errores:
         return jsonify({'error': 'Faltan datos obligatorios', 'errores': errores}), 400
-    solicitud_id = svc.crear(data, data.get('items', []))
+    solicitud_id = svc.crear(data, data.get('items', []), data.get('facturas', []))
     return jsonify(svc.obtener(solicitud_id)), 201
 
 
@@ -44,7 +44,7 @@ def actualizar(solicitud_id):
     errores = svc.validar(data)
     if errores:
         return jsonify({'error': 'Faltan datos obligatorios', 'errores': errores}), 400
-    ok, error = svc.actualizar(solicitud_id, data, data.get('items', []))
+    ok, error = svc.actualizar(solicitud_id, data, data.get('items', []), data.get('facturas'))
     if not ok:
         return jsonify({'error': error}), 400
     return jsonify(svc.obtener(solicitud_id))
@@ -163,14 +163,42 @@ def pdf(solicitud_id):
                      download_name=f'Autorizacion-Generica-{solicitud_id}.pdf')
 
 
-@bp.route('/solicitudes/<int:solicitud_id>/factura', methods=['GET'])
-def factura(solicitud_id):
-    """Devuelve el PDF original de la factura asociada."""
+def _adjunto(archivo, nombre_descarga, mimetype):
+    """Sirve un archivo de uploads/ validando que exista y no escape del directorio."""
+    if not archivo:
+        return jsonify({'error': 'No hay archivo adjunto'}), 404
+    ruta = os.path.normpath(os.path.join(UPLOADS, archivo))
+    if not ruta.startswith(os.path.normpath(UPLOADS)) or not os.path.exists(ruta):
+        return jsonify({'error': 'El archivo no está disponible'}), 404
+    return send_file(ruta, mimetype=mimetype, download_name=nombre_descarga)
+
+
+@bp.route('/solicitudes/<int:solicitud_id>/facturas/<int:factura_id>', methods=['GET'])
+def factura(solicitud_id, factura_id):
+    """Devuelve el PDF original de una de las facturas de la solicitud."""
     solicitud = svc.obtener(solicitud_id)
-    if not solicitud or not solicitud['factura_archivo']:
-        return jsonify({'error': 'La solicitud no tiene factura adjunta'}), 404
-    ruta = os.path.join(UPLOADS, solicitud['factura_archivo'])
-    if not os.path.exists(ruta):
-        return jsonify({'error': 'El archivo de la factura no está disponible'}), 404
-    return send_file(ruta, mimetype='application/pdf',
-                     download_name=solicitud['factura_nombre'] or 'factura.pdf')
+    if not solicitud:
+        return jsonify({'error': 'La solicitud no existe'}), 404
+    fac = next((f for f in solicitud['facturas'] if f['id'] == factura_id), None)
+    if not fac:
+        return jsonify({'error': 'La factura no existe'}), 404
+    return _adjunto(fac['archivo'], fac['nombre'] or 'factura.pdf', 'application/pdf')
+
+
+@bp.route('/solicitudes/<int:solicitud_id>/cbu-imagen', methods=['GET'])
+def cbu_imagen(solicitud_id):
+    solicitud = svc.obtener(solicitud_id)
+    if not solicitud:
+        return jsonify({'error': 'La solicitud no existe'}), 404
+    ext = os.path.splitext(solicitud['cbu_imagen'])[1].lower()
+    mime = 'image/png' if ext == '.png' else 'image/jpeg'
+    return _adjunto(solicitud['cbu_imagen'], f'CBU-{solicitud_id}{ext}', mime)
+
+
+@bp.route('/solicitudes/<int:solicitud_id>/legajo', methods=['GET'])
+def legajo(solicitud_id):
+    solicitud = svc.obtener(solicitud_id)
+    if not solicitud:
+        return jsonify({'error': 'La solicitud no existe'}), 404
+    return _adjunto(solicitud['legajo_archivo'],
+                    solicitud['legajo_nombre'] or f'Legajo-{solicitud_id}.pdf', 'application/pdf')

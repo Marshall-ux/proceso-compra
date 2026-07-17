@@ -4,7 +4,8 @@ import FormularioSolicitud from '../components/FormularioSolicitud.jsx'
 import PanelAutorizacion from '../components/PanelAutorizacion.jsx'
 import { fmtMoney } from '../constants.js'
 import {
-  actualizarSolicitud, eliminarSolicitud, obtenerSolicitud, urlFactura, urlPdf,
+  actualizarSolicitud, eliminarSolicitud, obtenerSolicitud,
+  urlCbuImagen, urlFactura, urlLegajo, urlPdf,
 } from '../services/api.js'
 
 export default function DetallePage() {
@@ -71,10 +72,19 @@ export default function DetallePage() {
           </h1>
           <div className="toolbar__info">
             {solicitud.proveedor_nombre} · {solicitud.marca} · $ {fmtMoney(solicitud.monto_total)}
-            {solicitud.factura_archivo && (
-              <> · <a className="link-factura" href={urlFactura(solicitud.id)} target="_blank" rel="noreferrer">
-                ver factura original
-              </a></>
+            {solicitud.criticidad === 'urgente' && <> · <span className="badge badge--danger">Urgente</span></>}
+          </div>
+          <div className="toolbar__info" style={{ marginTop: '0.35rem', display: 'flex', gap: '0.9rem', flexWrap: 'wrap' }}>
+            {solicitud.facturas?.map((f, i) => (
+              <a key={f.id} className="link-factura" href={urlFactura(solicitud.id, f.id)} target="_blank" rel="noreferrer">
+                📄 {solicitud.facturas.length > 1 ? `factura ${i + 1}` : 'ver factura'}
+              </a>
+            ))}
+            {solicitud.cbu_imagen && (
+              <a className="link-factura" href={urlCbuImagen(solicitud.id)} target="_blank" rel="noreferrer">🏦 CBU (imagen)</a>
+            )}
+            {solicitud.legajo_archivo && (
+              <a className="link-factura" href={urlLegajo(solicitud.id)} target="_blank" rel="noreferrer">📁 legajo impositivo</a>
             )}
           </div>
         </div>
