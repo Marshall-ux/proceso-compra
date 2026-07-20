@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react'
 import { LISTAS, fmtMoney } from '../constants.js'
-import { blanquearPin, listarAutorizados } from '../services/api.js'
+import {
+  blanquearPin, desbloquearAutorizado, generarCodigoAlta, listarAutorizados,
+} from '../services/api.js'
 
-// Consulta de las 4 planillas de autorizados (Nissan, Jeep, Kia, Multimarca).
+// Consulta de las 4 planillas de autorizados (Nissan, Jeep, Kia, Multimarca)
+// y administración de sus PIN.
 export default function AutorizadosPage() {
   const [autorizados, setAutorizados] = useState([])
   const [lista, setLista] = useState('')
   const [cargando, setCargando] = useState(true)
+  const [codigo, setCodigo] = useState(null)   // { nombre, codigo, aviso }
+  const [error, setError] = useState('')
 
   const cargar = () => {
     setCargando(true)
@@ -15,11 +20,30 @@ export default function AutorizadosPage() {
 
   useEffect(cargar, [lista])
 
-  const blanquear = async (a) => {
-    if (!confirm(`¿Blanquear el PIN de ${a.nombre}? Va a tener que definir uno nuevo la próxima vez que firme.`)) return
-    await blanquearPin(a.id)
-    cargar()
+  const conError = (fn) => async (...args) => {
+    setError('')
+    try {
+      return await fn(...args)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      cargar()
+    }
   }
+
+  const generar = conError(async (a) => {
+    setCodigo(await generarCodigoAlta(a.id))
+  })
+
+  const blanquear = conError(async (a) => {
+    if (!confirm(`¿Blanquear el PIN de ${a.nombre}?\n\nSe le va a generar un código nuevo que ` +
+                 `tenés que entregarle para que defina otro PIN.`)) return
+    setCodigo(await blanquearPin(a.id))
+  })
+
+  const desbloquear = conError(async (a) => {
+    await desbloquearAutorizado(a.id)
+  })
 
   return (
     <>
@@ -32,6 +56,23 @@ export default function AutorizadosPage() {
           </p>
         </div>
       </div>
+
+      {codigo && (
+        <div className="card" style={{ borderColor: 'var(--green)', marginBottom: '1.2rem' }}>
+          <div className="card__title">🔑 Código de alta para {codigo.nombre}</div>
+          <div className="codigo-alta">{codigo.codigo}</div>
+          <div className="card__hint" style={{ marginTop: '0.8rem', marginBottom: 0 }}>
+            {codigo.aviso} Entregáselo <strong>en mano</strong>: con ese código la persona define
+            su propio PIN, y así nadie puede firmar en su nombre.
+          </div>
+          <button className="btn btn--ghost btn--sm" style={{ marginTop: '0.9rem' }}
+                  onClick={() => setCodigo(null)}>
+            Ya lo anoté, cerrar
+          </button>
+        </div>
+      )}
+
+      {error && <div className="alert alert--error">{error}</div>}
 
       <div className="card">
         <div className="toolbar">
@@ -81,16 +122,31 @@ export default function AutorizadosPage() {
                       {a.conceptos}
                     </td>
                     <td>
-                      {a.tiene_pin
-                        ? <span className="badge badge--success">Activo</span>
-                        : <span className="badge badge--muted">Sin definir</span>}
+                      {a.bloqueado
+                        ? <span className="badge badge--danger">Bloqueado {a.bloqueado_minutos} min</span>
+                        : a.tiene_pin
+                          ? <span className="badge badge--success">Activo</span>
+                          : a.alta_pendiente
+                            ? <span className="badge badge--info">Código entregado</span>
+                            : <span className="badge badge--muted">Sin definir</span>}
                     </td>
                     <td>
-                      {a.tiene_pin && (
-                        <button className="btn btn--danger btn--sm" onClick={() => blanquear(a)}>
-                          Blanquear PIN
-                        </button>
-                      )}
+                      <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                        {a.bloqueado && (
+                          <button className="btn btn--ghost btn--sm" onClick={() => desbloquear(a)}>
+                            Desbloquear
+                          </button>
+                        )}
+                        {a.tiene_pin ? (
+                          <button className="btn btn--danger btn--sm" onClick={() => blanquear(a)}>
+                            Blanquear PIN
+                          </button>
+                        ) : (
+                          <button className="btn btn--ghost btn--sm" onClick={() => generar(a)}>
+                            {a.alta_pendiente ? 'Generar otro código' : 'Generar código de alta'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

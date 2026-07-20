@@ -14,7 +14,23 @@ CREATE TABLE IF NOT EXISTS autorizados (
     monto_autorizado  REAL,                    -- NULL = SIN LIMITE
     conceptos         TEXT NOT NULL DEFAULT '',
     pin_hash          TEXT,                    -- NULL = todavia no dio de alta su PIN
-    activo            INTEGER NOT NULL DEFAULT 1
+    activo            INTEGER NOT NULL DEFAULT 1,
+    -- Alta de PIN: el admin genera un codigo de un solo uso y se lo entrega a la
+    -- persona; sin ese codigo nadie puede darle de alta el PIN a otro.
+    codigo_alta_hash  TEXT,
+    codigo_alta_fecha TEXT,
+    -- Bloqueo por intentos fallidos.
+    intentos_fallidos INTEGER NOT NULL DEFAULT 0,
+    bloqueado_hasta   TEXT
+);
+
+-- Auditoria de intentos: quien intento firmar, cuando y con que resultado.
+CREATE TABLE IF NOT EXISTS intentos_pin (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    autorizado_id INTEGER NOT NULL REFERENCES autorizados(id) ON DELETE CASCADE,
+    solicitud_id  INTEGER,
+    resultado     TEXT NOT NULL,   -- ok | pin_incorrecto | bloqueado | sin_pin | alta | codigo_invalido
+    fecha         TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS solicitudes (
@@ -124,12 +140,21 @@ def init_db():
         conn.close()
 
 
+_COLUMNAS_AUTORIZADOS = {
+    'codigo_alta_hash': 'TEXT',
+    'codigo_alta_fecha': 'TEXT',
+    'intentos_fallidos': 'INTEGER NOT NULL DEFAULT 0',
+    'bloqueado_hasta': 'TEXT',
+}
+
+
 def _migrar(conn):
     """Agrega a una base preexistente las columnas nuevas que falten."""
-    existentes = {r['name'] for r in conn.execute('PRAGMA table_info(solicitudes)')}
-    for columna, definicion in _COLUMNAS_V2.items():
-        if columna not in existentes:
-            conn.execute(f'ALTER TABLE solicitudes ADD COLUMN {columna} {definicion}')
+    for tabla, columnas in (('solicitudes', _COLUMNAS_V2), ('autorizados', _COLUMNAS_AUTORIZADOS)):
+        existentes = {r['name'] for r in conn.execute(f'PRAGMA table_info({tabla})')}
+        for columna, definicion in columnas.items():
+            if columna not in existentes:
+                conn.execute(f'ALTER TABLE {tabla} ADD COLUMN {columna} {definicion}')
 
 
 def _seed_autorizados(conn):

@@ -2,6 +2,7 @@
 
 from models.database import get_db
 from services.marcas import listas_para_marca
+from services.pins import esta_bloqueado
 
 AUTORIZACIONES_REQUERIDAS = 2
 
@@ -204,7 +205,7 @@ def autorizados_para(solicitud):
     try:
         placeholders = ', '.join('?' * len(listas))
         rows = conn.execute(
-            f'SELECT id, nombre, cargo, lista, monto_autorizado, conceptos, '
+            f'SELECT id, nombre, cargo, lista, monto_autorizado, conceptos, bloqueado_hasta, '
             f'(pin_hash IS NOT NULL) AS tiene_pin FROM autorizados '
             f'WHERE activo = 1 AND lista IN ({placeholders}) ORDER BY lista, nombre', listas).fetchall()
     finally:
@@ -213,6 +214,7 @@ def autorizados_para(solicitud):
     autorizados = []
     for r in rows:
         tope = r['monto_autorizado']
+        bloqueado, minutos = esta_bloqueado(r['bloqueado_hasta'])
         autorizados.append({
             'id': r['id'],
             'nombre': r['nombre'],
@@ -222,6 +224,8 @@ def autorizados_para(solicitud):
             'sin_limite': tope is None,
             'conceptos': r['conceptos'],
             'tiene_pin': bool(r['tiene_pin']),
+            'bloqueado': bloqueado,
+            'bloqueado_minutos': minutos,
             'excede_tope': tope is not None and monto > tope,
             'ya_firmo': r['nombre'] in ya_firmaron,
         })

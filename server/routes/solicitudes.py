@@ -1,11 +1,13 @@
 import os
+from datetime import datetime
 
 from flask import Blueprint, jsonify, request, send_file
 
 from models.database import get_db
 from services import solicitudes as svc
-from services.pdf_fill import fmt_money, generar_pdf
-from services.pins import hash_pin, pin_valido, verificar_pin
+from services.autorizacion import ErrorAutorizante, firmar, verificar_autorizante
+from services.paquete import armar_zip, armar_zip_lote, nombre_zip
+from services.pdf_fill import fmt_money, generar_pdf, generar_pdf_con_facturas
 
 bp = Blueprint('solicitudes', __name__)
 
@@ -62,9 +64,7 @@ def autorizar(solicitud_id):
     """Registra la firma de un autorizado. Hacen falta dos personas distintas para
     que la solicitud quede autorizada."""
     data = request.get_json(silent=True) or {}
-    autorizado_id = data.get('autorizado_id')
     pin = str(data.get('pin') or '')
-    pin_nuevo = str(data.get('pin_nuevo') or '')
 
     solicitud = svc.obtener(solicitud_id)
     if not solicitud:
@@ -74,60 +74,93 @@ def autorizar(solicitud_id):
 
     conn = get_db()
     try:
-        autorizado = conn.execute(
-            'SELECT * FROM autorizados WHERE id = ? AND activo = 1', (autorizado_id,)).fetchone()
-        if not autorizado:
-            return jsonify({'error': 'El autorizado no existe'}), 404
+        try:
+            autorizado = verificar_autorizante(conn, data.get('autorizado_id'), pin, solicitud_id)
+        except ErrorAutorizante as e:
+            return jsonify({'error': e.mensaje, **e.extra}), e.codigo
 
-        # La marca de la solicitud tiene que estar dentro de la planilla del autorizado.
-        habilitados = {a['id'] for a in svc.autorizados_para(solicitud)}
-        if autorizado['id'] not in habilitados:
-            return jsonify({'error': f'{autorizado["nombre"]} no está habilitado para autorizar '
-                                     f'compras de la marca {solicitud["marca"]}'}), 403
-
-        # Primera vez que firma: da de alta su PIN.
-        if not autorizado['pin_hash']:
-            if not pin_valido(pin_nuevo):
-                return jsonify({'error': 'primer_uso',
-                                'mensaje': f'{autorizado["nombre"]} todavía no tiene PIN. '
-                                           f'Definí uno de 4 a 6 dígitos.'}), 409
-            conn.execute('UPDATE autorizados SET pin_hash = ? WHERE id = ?',
-                         (hash_pin(pin_nuevo), autorizado['id']))
+        ok, motivo, excedio = firmar(conn, solicitud, autorizado)
+        if not ok:
             conn.commit()
-        elif not verificar_pin(pin, autorizado['pin_hash']):
-            return jsonify({'error': 'PIN incorrecto'}), 403
-
-        # Dos firmas, dos personas: la misma no puede firmar dos veces.
-        ya = conn.execute(
-            'SELECT 1 FROM autorizaciones WHERE solicitud_id = ? AND autorizado_id = ?',
-            (solicitud_id, autorizado['id'])).fetchone()
-        if ya:
-            return jsonify({'error': f'{autorizado["nombre"]} ya autorizó esta solicitud. '
-                                     f'Hacen falta dos personas distintas.'}), 400
-
-        tope = autorizado['monto_autorizado']
-        excedio = tope is not None and float(solicitud['monto_total'] or 0) > tope
-
-        conn.execute(
-            'INSERT INTO autorizaciones (solicitud_id, autorizado_id, excedio_tope, monto_tope) '
-            'VALUES (?, ?, ?, ?)', (solicitud_id, autorizado['id'], 1 if excedio else 0, tope))
-
-        firmas = conn.execute('SELECT COUNT(*) AS n FROM autorizaciones WHERE solicitud_id = ?',
-                              (solicitud_id,)).fetchone()['n']
-        if firmas >= svc.AUTORIZACIONES_REQUERIDAS:
-            conn.execute('UPDATE solicitudes SET estado = "autorizada", '
-                         'updated_at = datetime("now", "localtime") WHERE id = ?', (solicitud_id,))
+            return jsonify({'error': motivo}), 400
         conn.commit()
+        nombre, tope = autorizado['nombre'], autorizado['monto_autorizado']
     finally:
         conn.close()
 
     resultado = svc.obtener(solicitud_id)
     resultado['autorizados_disponibles'] = svc.autorizados_para(resultado)
     resultado['aviso_tope'] = (
-        f'{autorizado["nombre"]} autorizó un monto que supera su tope de '
+        f'{nombre} autorizó un monto que supera su tope de '
         f'$ {fmt_money(tope)}. Queda registrado en el PDF.' if excedio else ''
     )
     return jsonify(resultado)
+
+
+@bp.route('/solicitudes/autorizar-lote', methods=['POST'])
+def autorizar_lote():
+    """Firma varias solicitudes de una vez: el PIN se pide una sola vez, pero las
+    reglas (marca habilitada, no firmar dos veces, ya autorizada) se aplican una
+    por una. Devuelve qué se firmó y qué se salteó, con el motivo."""
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids') or []
+    pin = str(data.get('pin') or '')
+    if not ids:
+        return jsonify({'error': 'No se recibió ninguna solicitud'}), 400
+
+    conn = get_db()
+    try:
+        try:
+            autorizado = verificar_autorizante(conn, data.get('autorizado_id'), pin)
+        except ErrorAutorizante as e:
+            return jsonify({'error': e.mensaje, **e.extra}), e.codigo
+
+        firmadas, salteadas, avisos = [], [], []
+        for sid in ids:
+            solicitud = conn.execute('SELECT * FROM solicitudes WHERE id = ?', (sid,)).fetchone()
+            if not solicitud:
+                salteadas.append({'id': sid, 'motivo': 'No existe'})
+                continue
+            ok, motivo, excedio = firmar(conn, solicitud, autorizado)
+            if ok:
+                firmadas.append(sid)
+                if excedio:
+                    avisos.append(f'Solicitud #{sid}: supera el tope de '
+                                  f'$ {fmt_money(autorizado["monto_autorizado"])}.')
+            else:
+                salteadas.append({'id': sid, 'motivo': motivo})
+        conn.commit()
+        nombre = autorizado['nombre']
+    finally:
+        conn.close()
+
+    return jsonify({
+        'ok': True,
+        'autorizante': nombre,
+        'firmadas': firmadas,
+        'salteadas': salteadas,
+        'avisos': avisos,
+        'resumen': f'{nombre} firmó {len(firmadas)} de {len(ids)} solicitudes.',
+    })
+
+
+@bp.route('/solicitudes/<int:solicitud_id>/autopack', methods=['POST'])
+def marcar_autopack(solicitud_id):
+    """Tilde de 'cargado en Autopack', para que administración no se saltee el paso
+    de cargar la operación en el otro sistema."""
+    data = request.get_json(silent=True) or {}
+    valor = 1 if data.get('ok') else 0
+    conn = get_db()
+    try:
+        cur = conn.execute(
+            'UPDATE solicitudes SET autopack_ok = ?, updated_at = datetime("now", "localtime") '
+            'WHERE id = ?', (valor, solicitud_id))
+        conn.commit()
+        if cur.rowcount == 0:
+            return jsonify({'error': 'La solicitud no existe'}), 404
+    finally:
+        conn.close()
+    return jsonify({'ok': True, 'autopack_ok': valor})
 
 
 @bp.route('/solicitudes/<int:solicitud_id>/autorizaciones/<int:autorizacion_id>', methods=['DELETE'])
@@ -161,6 +194,56 @@ def pdf(solicitud_id):
     generar_pdf(solicitud, destino)
     return send_file(destino, mimetype='application/pdf', as_attachment=False,
                      download_name=f'Autorizacion-Generica-{solicitud_id}.pdf')
+
+
+@bp.route('/solicitudes/<int:solicitud_id>/pdf-completo', methods=['GET'])
+def pdf_completo(solicitud_id):
+    """Autorización + facturas en un solo PDF, para imprimir todo junto."""
+    solicitud = svc.obtener(solicitud_id)
+    if not solicitud:
+        return jsonify({'error': 'La solicitud no existe'}), 404
+
+    os.makedirs(GENERADOS, exist_ok=True)
+    autorizacion = os.path.join(GENERADOS, f'autorizacion-{solicitud_id}.pdf')
+    generar_pdf(solicitud, autorizacion)
+
+    rutas = []
+    for f in solicitud['facturas']:
+        ruta = os.path.normpath(os.path.join(UPLOADS, f['archivo'] or ''))
+        if ruta.startswith(os.path.normpath(UPLOADS)) and os.path.exists(ruta):
+            rutas.append((f['nombre'], ruta))
+
+    destino = os.path.join(GENERADOS, f'autorizacion-completa-{solicitud_id}.pdf')
+    generar_pdf_con_facturas(autorizacion, rutas, destino)
+    return send_file(destino, mimetype='application/pdf', as_attachment=False,
+                     download_name=f'Autorizacion-{solicitud_id}-con-facturas.pdf')
+
+
+@bp.route('/solicitudes/<int:solicitud_id>/zip', methods=['GET'])
+def zip_solicitud(solicitud_id):
+    """Todo lo de la solicitud en un ZIP, para archivar en el disco interno."""
+    solicitud = svc.obtener(solicitud_id)
+    if not solicitud:
+        return jsonify({'error': 'La solicitud no existe'}), 404
+    return send_file(armar_zip(solicitud), mimetype='application/zip',
+                     as_attachment=True, download_name=nombre_zip(solicitud))
+
+
+@bp.route('/solicitudes/zip', methods=['GET'])
+def zip_lote():
+    """ZIP con varias solicitudes (?ids=1,2,3), cada una en su carpeta."""
+    crudos = request.args.get('ids', '')
+    ids = [int(x) for x in crudos.split(',') if x.strip().isdigit()]
+    if not ids:
+        return jsonify({'error': 'Indicá qué solicitudes descargar'}), 400
+
+    solicitudes = [s for s in (svc.obtener(i) for i in ids) if s]
+    if not solicitudes:
+        return jsonify({'error': 'Ninguna de esas solicitudes existe'}), 404
+
+    nombre = f'Solicitudes-{datetime.now().strftime("%Y-%m-%d")}-{len(solicitudes)}.zip'
+    return send_file(armar_zip_lote(solicitudes), mimetype='application/zip',
+                     as_attachment=True, download_name=nombre)
 
 
 def _adjunto(archivo, nombre_descarga, mimetype):

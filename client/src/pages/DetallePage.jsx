@@ -5,7 +5,7 @@ import PanelAutorizacion from '../components/PanelAutorizacion.jsx'
 import { fmtMoney } from '../constants.js'
 import {
   actualizarSolicitud, eliminarSolicitud, obtenerSolicitud,
-  urlCbuImagen, urlFactura, urlLegajo, urlPdf,
+  urlCbuImagen, urlFactura, urlLegajo, urlPdf, urlPdfCompleto, urlZip,
 } from '../services/api.js'
 
 export default function DetallePage() {
@@ -93,7 +93,21 @@ export default function DetallePage() {
           <a className="btn btn--ghost" href={urlPdf(solicitud.id)} target="_blank" rel="noreferrer">
             Ver PDF
           </a>
-          <a className="btn btn--primary" href={urlPdf(solicitud.id)} download>Descargar</a>
+          {solicitud.facturas?.length > 0 && (
+            <a
+              className="btn btn--ghost" href={urlPdfCompleto(solicitud.id)}
+              target="_blank" rel="noreferrer"
+              title="La autorización y las facturas en un solo PDF, para imprimir todo junto"
+            >
+              🖨 Autorización + facturas
+            </a>
+          )}
+          <a
+            className="btn btn--primary" href={urlZip(solicitud.id)}
+            title="Todo (autorización, facturas, legajo, CBU y un resumen) para archivar en el disco"
+          >
+            ⬇ Descargar todo (ZIP)
+          </a>
         </div>
       </div>
 

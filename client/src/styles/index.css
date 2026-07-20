@@ -345,6 +345,36 @@ table.data { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .pin-box .field { flex: 1; }
 .pin-input { letter-spacing: 0.4em; font-size: 1.1rem !important; text-align: center; }
 
+/* --------------------- seleccion multiple / codigo ---------------------- */
+.barra-seleccion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.9rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--green);
+  background: var(--green-soft);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  color: var(--green-dark);
+}
+
+.codigo-alta {
+  font-family: 'Consolas', 'SF Mono', monospace;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.35em;
+  text-align: center;
+  padding: 1rem;
+  background: var(--green-soft);
+  border: 2px dashed var(--green);
+  border-radius: var(--radius-sm);
+  color: var(--green-dark);
+  user-select: all;
+}
+
 /* ----------------------------- adjuntos --------------------------------- */
 .adjunto {
   display: flex;

@@ -222,11 +222,18 @@ def _firmas(ov, solicitud):
     c = ov.c
     autorizaciones = solicitud.get('autorizaciones', [])
 
-    # Solicitante
+    # Solicitante. Ojo: no es una firma verificada como la del autorizante (que valida
+    # con PIN); es el nombre que cargó quien hizo la solicitud, con su fecha.
     x0, y0, x1, y1 = CAJA_SOLICITANTE
     if solicitud.get('solicitado_por'):
+        centro_sol = (x0 + x1) / 2
+        c.setFillColor(black)
         c.setFont('Helvetica-Bold', 9)
-        c.drawCentredString((x0 + x1) / 2, y0 + 24, str(solicitud['solicitado_por']))
+        c.drawCentredString(centro_sol, y0 + 26, str(solicitud['solicitado_por']))
+        fecha_sol = fmt_fecha_hora(solicitud.get('created_at'))
+        if fecha_sol:
+            c.setFont('Helvetica-Oblique', 4.6)
+            c.drawCentredString(centro_sol, y0 + 15, f'Solicitado el {fecha_sol}')
 
     # Autorizantes: mitad izquierda y mitad derecha del recuadro original
     ax0, ay0, ax1, ay1 = CAJA_AUTORIZANTES
@@ -389,6 +396,26 @@ def generar_pdf(solicitud, destino):
     with open(destino, 'wb') as fh:
         writer.write(fh)
     return destino
+
+
+def generar_pdf_con_facturas(ruta_autorizacion, rutas_facturas, destino):
+    """Un solo PDF: la autorización adelante y las facturas atrás, para imprimir todo junto.
+    Una factura ilegible no rompe el armado: se omite y se informa."""
+    writer = PdfWriter()
+    for pagina in PdfReader(ruta_autorizacion).pages:
+        writer.add_page(pagina)
+
+    omitidas = []
+    for nombre, ruta in rutas_facturas:
+        try:
+            for pagina in PdfReader(ruta).pages:
+                writer.add_page(pagina)
+        except Exception:
+            omitidas.append(nombre)
+
+    with open(destino, 'wb') as fh:
+        writer.write(fh)
+    return omitidas
 
 
 def excede_items(solicitud):

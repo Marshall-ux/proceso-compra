@@ -40,6 +40,20 @@ export const subirLegajo = (archivo) => {
 export const blanquearPin = (autorizadoId) =>
   pedir(`/autorizados/${autorizadoId}/pin`, { method: 'DELETE' })
 
+export const generarCodigoAlta = (autorizadoId) =>
+  pedir(`/autorizados/${autorizadoId}/codigo-alta`, { method: 'POST' })
+
+export const desbloquearAutorizado = (autorizadoId) =>
+  pedir(`/autorizados/${autorizadoId}/desbloquear`, { method: 'POST' })
+
+// Alta de PIN (con código de administración) o cambio (con el PIN actual).
+export const definirPin = (autorizadoId, payload) =>
+  pedir(`/autorizados/${autorizadoId}/pin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
 export const listarSolicitudes = (params = {}) => {
   const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
   return pedir(`/solicitudes${qs ? `?${qs}` : ''}`)
@@ -76,7 +90,24 @@ export const quitarAutorizacion = (id, autorizacionId) =>
 export const listarAutorizados = (lista) =>
   pedir(`/autorizados${lista ? `?lista=${lista}` : ''}`)
 
+export const autorizarLote = (payload) =>
+  pedir('/solicitudes/autorizar-lote', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+export const marcarAutopack = (id, ok) =>
+  pedir(`/solicitudes/${id}/autopack`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ok }),
+  })
+
 export const urlPdf = (id) => `${BASE}/solicitudes/${id}/pdf`
+export const urlPdfCompleto = (id) => `${BASE}/solicitudes/${id}/pdf-completo`
+export const urlZip = (id) => `${BASE}/solicitudes/${id}/zip`
+export const urlZipLote = (ids) => `${BASE}/solicitudes/zip?ids=${ids.join(',')}`
 export const urlFactura = (id, facturaId) => `${BASE}/solicitudes/${id}/facturas/${facturaId}`
 export const urlCbuImagen = (id) => `${BASE}/solicitudes/${id}/cbu-imagen`
 export const urlLegajo = (id) => `${BASE}/solicitudes/${id}/legajo`

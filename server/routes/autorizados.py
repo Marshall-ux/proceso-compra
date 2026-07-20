@@ -1,7 +1,10 @@
 from flask import Blueprint, jsonify, request
 
 from models.database import get_db
-from services.pins import hash_pin, pin_valido, verificar_pin
+from services.pins import (
+    esta_bloqueado, generar_codigo, hash_pin, registrar_intento, validar_pin, verificar_codigo,
+    verificar_pin,
+)
 
 bp = Blueprint('autorizados', __name__)
 
@@ -12,8 +15,9 @@ def listar():
     lista = request.args.get('lista')
     conn = get_db()
     try:
-        sql = ('SELECT id, nombre, cargo, lista, monto_autorizado, conceptos, '
-               '(pin_hash IS NOT NULL) AS tiene_pin FROM autorizados WHERE activo = 1')
+        sql = ('SELECT id, nombre, cargo, lista, monto_autorizado, conceptos, bloqueado_hasta, '
+               '(pin_hash IS NOT NULL) AS tiene_pin, '
+               '(codigo_alta_hash IS NOT NULL) AS alta_pendiente FROM autorizados WHERE activo = 1')
         params = []
         if lista:
             sql += ' AND lista = ?'
@@ -23,39 +27,105 @@ def listar():
     finally:
         conn.close()
 
-    return jsonify([{
-        'id': r['id'],
-        'nombre': r['nombre'],
-        'cargo': r['cargo'],
-        'lista': r['lista'],
-        'monto_autorizado': r['monto_autorizado'],
-        'sin_limite': r['monto_autorizado'] is None,
-        'conceptos': r['conceptos'],
-        'tiene_pin': bool(r['tiene_pin']),
-    } for r in rows])
+    salida = []
+    for r in rows:
+        bloqueado, minutos = esta_bloqueado(r['bloqueado_hasta'])
+        salida.append({
+            'id': r['id'],
+            'nombre': r['nombre'],
+            'cargo': r['cargo'],
+            'lista': r['lista'],
+            'monto_autorizado': r['monto_autorizado'],
+            'sin_limite': r['monto_autorizado'] is None,
+            'conceptos': r['conceptos'],
+            'tiene_pin': bool(r['tiene_pin']),
+            'alta_pendiente': bool(r['alta_pendiente']),
+            'bloqueado': bloqueado,
+            'bloqueado_minutos': minutos,
+        })
+    return jsonify(salida)
+
+
+@bp.route('/autorizados/<int:autorizado_id>/codigo-alta', methods=['POST'])
+def generar_codigo_alta(autorizado_id):
+    """Genera el código de un solo uso para que la persona defina su PIN.
+    El código se muestra UNA sola vez: administración se lo entrega en mano."""
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT nombre FROM autorizados WHERE id = ? AND activo = 1',
+                           (autorizado_id,)).fetchone()
+        if not row:
+            return jsonify({'error': 'El autorizado no existe'}), 404
+
+        codigo, codigo_hash = generar_codigo()
+        conn.execute(
+            'UPDATE autorizados SET codigo_alta_hash = ?, '
+            'codigo_alta_fecha = datetime("now", "localtime"), '
+            'intentos_fallidos = 0, bloqueado_hasta = NULL WHERE id = ?',
+            (codigo_hash, autorizado_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({
+        'ok': True,
+        'nombre': row['nombre'],
+        'codigo': codigo,
+        'aviso': 'Anotalo ahora: por seguridad no se vuelve a mostrar.',
+    })
 
 
 @bp.route('/autorizados/<int:autorizado_id>/pin', methods=['POST'])
 def definir_pin(autorizado_id):
-    """Alta o cambio de PIN. Para cambiarlo hay que saber el actual."""
+    """Alta o cambio de PIN.
+      - Alta (todavía sin PIN): requiere el código que entregó administración.
+      - Cambio: requiere el PIN actual.
+    """
     data = request.get_json(silent=True) or {}
     pin_nuevo = str(data.get('pin_nuevo') or '')
     pin_actual = str(data.get('pin_actual') or '')
+    codigo = str(data.get('codigo') or '')
 
-    if not pin_valido(pin_nuevo):
-        return jsonify({'error': 'El PIN debe tener entre 4 y 6 dígitos'}), 400
+    error_pin = validar_pin(pin_nuevo)
+    if error_pin:
+        return jsonify({'error': error_pin}), 400
 
     conn = get_db()
     try:
-        row = conn.execute('SELECT pin_hash FROM autorizados WHERE id = ? AND activo = 1',
-                           (autorizado_id,)).fetchone()
-        if not row:
+        a = conn.execute('SELECT * FROM autorizados WHERE id = ? AND activo = 1',
+                         (autorizado_id,)).fetchone()
+        if not a:
             return jsonify({'error': 'El autorizado no existe'}), 404
-        if row['pin_hash'] and not verificar_pin(pin_actual, row['pin_hash']):
-            return jsonify({'error': 'El PIN actual es incorrecto'}), 403
 
-        conn.execute('UPDATE autorizados SET pin_hash = ? WHERE id = ?',
-                     (hash_pin(pin_nuevo), autorizado_id))
+        bloqueado, minutos = esta_bloqueado(a['bloqueado_hasta'])
+        if bloqueado:
+            return jsonify({'error': f'Bloqueado por intentos fallidos. '
+                                     f'Probá en {minutos} minuto(s).'}), 423
+
+        if a['pin_hash']:
+            # Ya tiene PIN: para cambiarlo hay que saber el actual.
+            if codigo and not pin_actual:
+                return jsonify({'error': 'Ese código de alta ya fue usado. Si querés cambiar '
+                                         'tu PIN, ingresá el PIN actual.'}), 409
+            if not verificar_pin(pin_actual, a['pin_hash']):
+                registrar_intento(conn, autorizado_id, 'pin_incorrecto')
+                conn.commit()
+                return jsonify({'error': 'El PIN actual es incorrecto'}), 403
+        else:
+            # Alta: sin código válido no se puede definir el PIN de otra persona.
+            if not a['codigo_alta_hash']:
+                return jsonify({'error': 'No hay un código de alta generado. '
+                                         'Pedíselo a administración.'}), 409
+            if not verificar_codigo(codigo, a['codigo_alta_hash']):
+                registrar_intento(conn, autorizado_id, 'codigo_invalido')
+                conn.commit()
+                return jsonify({'error': 'El código de alta no es correcto'}), 403
+
+        conn.execute(
+            'UPDATE autorizados SET pin_hash = ?, codigo_alta_hash = NULL, '
+            'codigo_alta_fecha = NULL, intentos_fallidos = 0, bloqueado_hasta = NULL WHERE id = ?',
+            (hash_pin(pin_nuevo), autorizado_id))
+        registrar_intento(conn, autorizado_id, 'alta')
         conn.commit()
     finally:
         conn.close()
@@ -65,16 +135,57 @@ def definir_pin(autorizado_id):
 
 @bp.route('/autorizados/<int:autorizado_id>/pin', methods=['DELETE'])
 def blanquear_pin(autorizado_id):
-    """Blanqueo de PIN (reset admin): deja al autorizado sin PIN, para que defina uno
-    nuevo la próxima vez que firme. No requiere conocer el PIN actual."""
+    """Blanqueo (reset admin): borra el PIN y entrega un código de alta nuevo, para
+    que solo la persona pueda volver a definirlo."""
     conn = get_db()
     try:
-        row = conn.execute('SELECT id FROM autorizados WHERE id = ? AND activo = 1',
+        row = conn.execute('SELECT nombre FROM autorizados WHERE id = ? AND activo = 1',
                            (autorizado_id,)).fetchone()
         if not row:
             return jsonify({'error': 'El autorizado no existe'}), 404
-        conn.execute('UPDATE autorizados SET pin_hash = NULL WHERE id = ?', (autorizado_id,))
+
+        codigo, codigo_hash = generar_codigo()
+        conn.execute(
+            'UPDATE autorizados SET pin_hash = NULL, codigo_alta_hash = ?, '
+            'codigo_alta_fecha = datetime("now", "localtime"), '
+            'intentos_fallidos = 0, bloqueado_hasta = NULL WHERE id = ?',
+            (codigo_hash, autorizado_id))
         conn.commit()
     finally:
         conn.close()
+
+    return jsonify({
+        'ok': True,
+        'nombre': row['nombre'],
+        'codigo': codigo,
+        'aviso': 'Entregale este código a la persona: lo necesita para definir su nuevo PIN.',
+    })
+
+
+@bp.route('/autorizados/<int:autorizado_id>/desbloquear', methods=['POST'])
+def desbloquear(autorizado_id):
+    """Levanta el bloqueo por intentos fallidos sin tocar el PIN."""
+    conn = get_db()
+    try:
+        cur = conn.execute(
+            'UPDATE autorizados SET intentos_fallidos = 0, bloqueado_hasta = NULL '
+            'WHERE id = ? AND activo = 1', (autorizado_id,))
+        conn.commit()
+        if cur.rowcount == 0:
+            return jsonify({'error': 'El autorizado no existe'}), 404
+    finally:
+        conn.close()
     return jsonify({'ok': True})
+
+
+@bp.route('/autorizados/<int:autorizado_id>/intentos', methods=['GET'])
+def intentos(autorizado_id):
+    """Auditoría: últimos intentos de firma de esa persona."""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            'SELECT resultado, solicitud_id, fecha FROM intentos_pin '
+            'WHERE autorizado_id = ? ORDER BY id DESC LIMIT 50', (autorizado_id,)).fetchall()
+    finally:
+        conn.close()
+    return jsonify([{k: r[k] for k in r.keys()} for r in rows])
