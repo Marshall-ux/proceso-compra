@@ -361,6 +361,17 @@ table.data { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
   color: var(--green-dark);
 }
 
+.admin-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.8rem 1.1rem;
+  font-size: 0.9rem;
+  color: var(--text-soft);
+}
+
 .codigo-alta {
   font-family: 'Consolas', 'SF Mono', monospace;
   font-size: 2rem;

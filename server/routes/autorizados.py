@@ -1,12 +1,22 @@
 from flask import Blueprint, jsonify, request
 
 from models.database import get_db
+from services.admin import requiere_admin, usando_default, verificar_admin
 from services.pins import (
     esta_bloqueado, generar_codigo, hash_pin, registrar_intento, validar_pin, verificar_codigo,
     verificar_pin,
 )
 
 bp = Blueprint('autorizados', __name__)
+
+
+@bp.route('/admin/verificar', methods=['POST'])
+def verificar_clave_admin():
+    """La usa el panel para desbloquear las acciones de administración por sesión."""
+    data = request.get_json(silent=True) or {}
+    if not verificar_admin(str(data.get('clave') or '')):
+        return jsonify({'ok': False, 'error': 'Clave incorrecta'}), 401
+    return jsonify({'ok': True, 'usando_default': usando_default()})
 
 
 @bp.route('/autorizados', methods=['GET'])
@@ -47,6 +57,7 @@ def listar():
 
 
 @bp.route('/autorizados/<int:autorizado_id>/codigo-alta', methods=['POST'])
+@requiere_admin
 def generar_codigo_alta(autorizado_id):
     """Genera el código de un solo uso para que la persona defina su PIN.
     El código se muestra UNA sola vez: administración se lo entrega en mano."""
@@ -134,6 +145,7 @@ def definir_pin(autorizado_id):
 
 
 @bp.route('/autorizados/<int:autorizado_id>/pin', methods=['DELETE'])
+@requiere_admin
 def blanquear_pin(autorizado_id):
     """Blanqueo (reset admin): borra el PIN y entrega un código de alta nuevo, para
     que solo la persona pueda volver a definirlo."""
@@ -163,6 +175,7 @@ def blanquear_pin(autorizado_id):
 
 
 @bp.route('/autorizados/<int:autorizado_id>/desbloquear', methods=['POST'])
+@requiere_admin
 def desbloquear(autorizado_id):
     """Levanta el bloqueo por intentos fallidos sin tocar el PIN."""
     conn = get_db()
@@ -179,6 +192,7 @@ def desbloquear(autorizado_id):
 
 
 @bp.route('/autorizados/<int:autorizado_id>/intentos', methods=['GET'])
+@requiere_admin
 def intentos(autorizado_id):
     """Auditoría: últimos intentos de firma de esa persona."""
     conn = get_db()

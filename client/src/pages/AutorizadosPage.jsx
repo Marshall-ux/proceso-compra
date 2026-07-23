@@ -1,17 +1,23 @@
 import { useEffect, useState } from 'react'
 import { LISTAS, fmtMoney } from '../constants.js'
 import {
-  blanquearPin, desbloquearAutorizado, generarCodigoAlta, listarAutorizados,
+  blanquearPin, claveAdmin, desbloquearAutorizado, generarCodigoAlta, listarAutorizados,
+  verificarClaveAdmin,
 } from '../services/api.js'
 
 // Consulta de las 4 planillas de autorizados (Nissan, Jeep, Kia, Multimarca)
-// y administración de sus PIN.
+// y administración de sus PIN. Las acciones sensibles piden la clave de administración.
 export default function AutorizadosPage() {
   const [autorizados, setAutorizados] = useState([])
   const [lista, setLista] = useState('')
   const [cargando, setCargando] = useState(true)
   const [codigo, setCodigo] = useState(null)   // { nombre, codigo, aviso }
   const [error, setError] = useState('')
+
+  // Desbloqueo de administración (por sesión del navegador).
+  const [desbloqueado, setDesbloqueado] = useState(!!claveAdmin())
+  const [clave, setClave] = useState('')
+  const [avisoDefault, setAvisoDefault] = useState(false)
 
   const cargar = () => {
     setCargando(true)
@@ -20,11 +26,35 @@ export default function AutorizadosPage() {
 
   useEffect(cargar, [lista])
 
+  const desbloquearAdmin = async () => {
+    setError('')
+    try {
+      const r = await verificarClaveAdmin(clave)
+      sessionStorage.setItem('claveAdmin', clave)
+      setDesbloqueado(true)
+      setAvisoDefault(!!r.usando_default)
+      setClave('')
+    } catch {
+      setError('Clave de administración incorrecta.')
+    }
+  }
+
+  const bloquearAdmin = () => {
+    sessionStorage.removeItem('claveAdmin')
+    setDesbloqueado(false)
+    setCodigo(null)
+  }
+
   const conError = (fn) => async (...args) => {
     setError('')
     try {
       return await fn(...args)
     } catch (e) {
+      if (e.status === 401) {   // la clave cambió o venció: volver a pedirla
+        bloquearAdmin()
+        setError('La sesión de administración expiró. Ingresá la clave de nuevo.')
+        return
+      }
       setError(e.message)
     } finally {
       cargar()
@@ -56,6 +86,39 @@ export default function AutorizadosPage() {
           </p>
         </div>
       </div>
+
+      <div className="card admin-bar" style={{ marginBottom: '1.2rem' }}>
+        {desbloqueado ? (
+          <>
+            <span>🔓 <strong>Administración desbloqueada.</strong> Podés generar códigos de alta,
+              blanquear y desbloquear PINs.</span>
+            <button className="btn btn--ghost btn--sm" onClick={bloquearAdmin}>🔒 Bloquear</button>
+          </>
+        ) : (
+          <>
+            <span>🔒 Para blanquear o generar códigos de alta, ingresá la clave de administración.</span>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="password" placeholder="Clave de administración"
+                value={clave} onChange={(e) => setClave(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && desbloquearAdmin()}
+                style={{
+                  padding: '0.5rem 0.7rem', borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-strong)', fontFamily: 'inherit',
+                }}
+              />
+              <button className="btn btn--primary btn--sm" onClick={desbloquearAdmin}>Desbloquear</button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {avisoDefault && desbloqueado && (
+        <div className="alert alert--warning">
+          Estás usando la <strong>clave por defecto</strong>. Antes de usar la app en serio,
+          configurá una propia (variable <code>ADMIN_PASSWORD</code> en el despliegue).
+        </div>
+      )}
 
       {codigo && (
         <div className="card" style={{ borderColor: 'var(--green)', marginBottom: '1.2rem' }}>
@@ -131,22 +194,26 @@ export default function AutorizadosPage() {
                             : <span className="badge badge--muted">Sin definir</span>}
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                        {a.bloqueado && (
-                          <button className="btn btn--ghost btn--sm" onClick={() => desbloquear(a)}>
-                            Desbloquear
-                          </button>
-                        )}
-                        {a.tiene_pin ? (
-                          <button className="btn btn--danger btn--sm" onClick={() => blanquear(a)}>
-                            Blanquear PIN
-                          </button>
-                        ) : (
-                          <button className="btn btn--ghost btn--sm" onClick={() => generar(a)}>
-                            {a.alta_pendiente ? 'Generar otro código' : 'Generar código de alta'}
-                          </button>
-                        )}
-                      </div>
+                      {desbloqueado ? (
+                        <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                          {a.bloqueado && (
+                            <button className="btn btn--ghost btn--sm" onClick={() => desbloquear(a)}>
+                              Desbloquear
+                            </button>
+                          )}
+                          {a.tiene_pin ? (
+                            <button className="btn btn--danger btn--sm" onClick={() => blanquear(a)}>
+                              Blanquear PIN
+                            </button>
+                          ) : (
+                            <button className="btn btn--ghost btn--sm" onClick={() => generar(a)}>
+                              {a.alta_pendiente ? 'Generar otro código' : 'Generar código de alta'}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>🔒</span>
+                      )}
                     </td>
                   </tr>
                 ))}

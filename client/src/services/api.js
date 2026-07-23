@@ -37,14 +37,25 @@ export const subirLegajo = (archivo) => {
   return pedir('/archivos/legajo', { method: 'POST', body: form })
 }
 
+// --- acciones de administración: van firmadas con la clave admin de la sesión ---
+export const claveAdmin = () => sessionStorage.getItem('claveAdmin') || ''
+const adminHeaders = () => ({ 'X-Admin-Password': claveAdmin() })
+
+export const verificarClaveAdmin = (clave) =>
+  pedir('/admin/verificar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clave }),
+  })
+
 export const blanquearPin = (autorizadoId) =>
-  pedir(`/autorizados/${autorizadoId}/pin`, { method: 'DELETE' })
+  pedir(`/autorizados/${autorizadoId}/pin`, { method: 'DELETE', headers: adminHeaders() })
 
 export const generarCodigoAlta = (autorizadoId) =>
-  pedir(`/autorizados/${autorizadoId}/codigo-alta`, { method: 'POST' })
+  pedir(`/autorizados/${autorizadoId}/codigo-alta`, { method: 'POST', headers: adminHeaders() })
 
 export const desbloquearAutorizado = (autorizadoId) =>
-  pedir(`/autorizados/${autorizadoId}/desbloquear`, { method: 'POST' })
+  pedir(`/autorizados/${autorizadoId}/desbloquear`, { method: 'POST', headers: adminHeaders() })
 
 // Alta de PIN (con código de administración) o cambio (con el PIN actual).
 export const definirPin = (autorizadoId, payload) =>

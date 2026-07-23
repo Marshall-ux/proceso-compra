@@ -11,6 +11,9 @@ services:
     environment:
       - FLASK_ENV=development
       - DATABASE_PATH=/app/data/app.db
+      # Clave de administración para blanquear/generar códigos/desbloquear PINs.
+      # CAMBIAR por una propia antes de usar en serio.
+      - ADMIN_PASSWORD=neostar-2026
     networks:
       - default
   frontend:
