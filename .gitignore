@@ -33,3 +33,7 @@ Thumbs.db
 
 # Previews generados en pruebas
 docs/_*.pdf
+
+# Facturas/autorizaciones reales que se dejan en la raiz para probar: NO subir.
+# (los ejemplos versionados viven en docs/)
+/*.pdf
