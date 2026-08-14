@@ -16,6 +16,18 @@ from services.marcas import EMPRESAS
 # CUITs del grupo: nunca son el proveedor, son el cliente (quien compra).
 CUITS_GRUPO = {'34-68473349-6'}
 
+# Proveedores cuyo nombre no figura como texto en la factura (viene en el logo, como
+# imagen). Se resuelven por CUIT. Agregar acá los proveedores habituales de este tipo.
+PROVEEDORES_CONOCIDOS = {
+    '30-70709793-7': 'H.S.E. INGENIERIA S R L',
+}
+
+# Rótulos que NO son el nombre del proveedor (evita tomar "Comprobante:", etc.).
+_ROTULOS = {
+    'comprobante', 'factura', 'presupuesto', 'remito', 'original', 'duplicado',
+    'triplicado', 'sres', 'senores', 'cliente', 'razon social',
+}
+
 # Como aparece cada empresa del grupo en la factura -> valor del formulario.
 _ALIAS_EMPRESAS = {
     'ALCO ROSARIO': 'ALCO ROSARIO S.A.',
@@ -90,9 +102,16 @@ def _cuit_proveedor(texto, lineas):
     return ''
 
 
+def _es_rotulo(texto):
+    """True si el texto es un rótulo (Comprobante, Factura…) y no un nombre real."""
+    limpio = _norm(texto).rstrip(':').strip()
+    return limpio in _ROTULOS or not limpio
+
+
 def _nombre_proveedor(lineas):
     """El proveedor suele ser la razon social del encabezado (primeras lineas),
-    antes de cualquier mencion al cliente."""
+    antes de cualquier mencion al cliente. Si el nombre no está como texto (viene en
+    el logo), se devuelve vacío y se completa a mano o por CUIT."""
     for linea in lineas[:6]:
         limpia = linea.strip()
         if len(limpia) < 3:
@@ -104,10 +123,12 @@ def _nombre_proveedor(lineas):
             # Puede venir pegado: "Daniel Omar Oriti A FACTURA" -> corto antes.
             corte = re.split(r'\s+(?:FACTURA|PRESUPUESTO|REMITO)', limpia)[0].strip()
             corte = re.sub(r'\s+[A-C]$', '', corte).strip()
-            if len(corte) >= 3:
+            if len(corte) >= 3 and not _es_rotulo(corte):
                 return corte
             continue
-        return re.sub(r'\s+[A-C]$', '', limpia).strip()
+        candidato = re.sub(r'\s+[A-C]$', '', limpia).strip()
+        if not _es_rotulo(candidato):
+            return candidato
     return ''
 
 
@@ -244,6 +265,10 @@ def extraer_datos_factura(path):
         'contacto_telefono': telefono,
         'cbu': cbu.group(1) if cbu else '',
     }
+
+    # Proveedor conocido por CUIT (nombre no legible en el texto): se resuelve solo.
+    if datos['cuit'] in PROVEEDORES_CONOCIDOS:
+        datos['proveedor_nombre'] = PROVEEDORES_CONOCIDOS[datos['cuit']]
 
     # Campos que el formulario necesita y la factura nunca trae.
     faltantes = [k for k in ('marca', 'concepto', 'proveedor_tipo', 'tipo_orden', 'solicitado_por')]

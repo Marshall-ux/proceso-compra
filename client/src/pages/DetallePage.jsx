@@ -132,11 +132,9 @@ export default function DetallePage() {
       <div className="card">
         <div className="toolbar" style={{ marginBottom: editando ? '1.2rem' : 0 }}>
           <div className="card__title" style={{ marginBottom: 0 }}>📋 Datos de la autorización</div>
-          {!editando && (
+          {!editando && !completa && (
             <div className="toolbar__actions">
-              {!completa && (
-                <button className="btn btn--ghost btn--sm" onClick={empezarEdicion}>Editar</button>
-              )}
+              <button className="btn btn--ghost btn--sm" onClick={empezarEdicion}>Editar</button>
               <button className="btn btn--danger btn--sm" onClick={() => { setBorrando(true); setMotivo(''); setEliminadoPor(''); setErrorBorrar('') }}>
                 Eliminar
               </button>
@@ -179,12 +177,6 @@ export default function DetallePage() {
               La solicitud se elimina de la lista, pero queda registrada en el historial de
               eliminaciones con este motivo. No se puede deshacer.
             </p>
-            {completa && (
-              <div className="alert alert--warning">
-                Ojo: esta solicitud ya está <strong>autorizada</strong>. Aun así se puede eliminar,
-                y va a quedar el acta del motivo.
-              </div>
-            )}
             {errorBorrar && <div className="alert alert--error">{errorBorrar}</div>}
             <div className="field">
               <label>Motivo de la eliminación <span style={{ color: 'var(--danger)' }}>*</span></label>

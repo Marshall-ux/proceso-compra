@@ -248,6 +248,8 @@ def eliminar(solicitud_id, motivo, eliminado_por=''):
         s = conn.execute('SELECT * FROM solicitudes WHERE id = ?', (solicitud_id,)).fetchone()
         if not s:
             return False, 'La solicitud no existe'
+        if s['estado'] == 'autorizada':
+            return False, 'Una solicitud ya autorizada no se puede eliminar'
         firmas = conn.execute(
             'SELECT COUNT(*) AS n FROM autorizaciones WHERE solicitud_id = ?',
             (solicitud_id,)).fetchone()['n']
