@@ -161,14 +161,9 @@ AUTORIZADOS = [
                      'ACARA, solicitud de facturas, recibos, viatico, contratacion de servicios '
                      'laborales, articulos de almacen y otros utiles de Adm y Fzas.',
     },
-    {
-        'nombre': 'Martin Depetris',
-        'cargo': 'Gerente Vtas FUNES',
-        'lista': 'multimarca',
-        'monto_autorizado': 2500000.00,
-        'conceptos': 'Todo lo relativo a insumos para sucursal, lavadero, jardineria, '
-                     'combustible, etc.',
-    },
+    # Martin Depetris (Gerente Vtas FUNES) - baja: ya no trabaja en la empresa (ago-2026).
+    # Se saca del roster; si su fila existe en la base, queda inactiva (no se borra, para
+    # conservar el historial de lo que haya firmado).
     {
         'nombre': 'Luciano Falletti',
         'cargo': 'Gerente Vtas CDG',

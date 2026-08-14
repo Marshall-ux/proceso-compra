@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { LISTAS, fmtMoney } from '../constants.js'
 import {
-  blanquearPin, claveAdmin, desbloquearAutorizado, generarCodigoAlta, listarAutorizados,
-  verificarClaveAdmin,
+  blanquearPin, cambiarActivoAutorizado, claveAdmin, desbloquearAutorizado, generarCodigoAlta,
+  listarAutorizados, verificarClaveAdmin,
 } from '../services/api.js'
 
 // Consulta de las 4 planillas de autorizados (Nissan, Jeep, Kia, Multimarca)
@@ -21,10 +21,11 @@ export default function AutorizadosPage() {
 
   const cargar = () => {
     setCargando(true)
-    listarAutorizados(lista).then(setAutorizados).finally(() => setCargando(false))
+    // Con el panel desbloqueado se ven también los dados de baja (para reactivarlos).
+    listarAutorizados(lista, desbloqueado).then(setAutorizados).finally(() => setCargando(false))
   }
 
-  useEffect(cargar, [lista])
+  useEffect(cargar, [lista, desbloqueado])
 
   const desbloquearAdmin = async () => {
     setError('')
@@ -73,6 +74,16 @@ export default function AutorizadosPage() {
 
   const desbloquear = conError(async (a) => {
     await desbloquearAutorizado(a.id)
+  })
+
+  const darDeBaja = conError(async (a) => {
+    if (!confirm(`¿Dar de baja a ${a.nombre}?\n\nNo va a poder autorizar más. Su historial se ` +
+                 `conserva y podés reactivarlo cuando quieras.`)) return
+    await cambiarActivoAutorizado(a.id, false)
+  })
+
+  const reactivar = conError(async (a) => {
+    await cambiarActivoAutorizado(a.id, true)
   })
 
   return (
@@ -172,8 +183,13 @@ export default function AutorizadosPage() {
               </thead>
               <tbody>
                 {autorizados.map((a) => (
-                  <tr key={a.id}>
-                    <td><strong>{a.nombre}</strong></td>
+                  <tr key={a.id} style={a.activo === false ? { opacity: 0.55 } : undefined}>
+                    <td>
+                      <strong>{a.nombre}</strong>
+                      {a.activo === false && (
+                        <span className="badge badge--muted" style={{ marginLeft: '0.4rem' }}>De baja</span>
+                      )}
+                    </td>
                     <td style={{ fontSize: '0.82rem' }}>{a.cargo}</td>
                     <td><span className="badge badge--muted">{LISTAS[a.lista] || a.lista}</span></td>
                     <td className="num">
@@ -196,19 +212,30 @@ export default function AutorizadosPage() {
                     <td>
                       {desbloqueado ? (
                         <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                          {a.bloqueado && (
-                            <button className="btn btn--ghost btn--sm" onClick={() => desbloquear(a)}>
-                              Desbloquear
-                            </button>
-                          )}
-                          {a.tiene_pin ? (
-                            <button className="btn btn--danger btn--sm" onClick={() => blanquear(a)}>
-                              Blanquear PIN
+                          {a.activo === false ? (
+                            <button className="btn btn--ghost btn--sm" onClick={() => reactivar(a)}>
+                              Reactivar
                             </button>
                           ) : (
-                            <button className="btn btn--ghost btn--sm" onClick={() => generar(a)}>
-                              {a.alta_pendiente ? 'Generar otro código' : 'Generar código de alta'}
-                            </button>
+                            <>
+                              {a.bloqueado && (
+                                <button className="btn btn--ghost btn--sm" onClick={() => desbloquear(a)}>
+                                  Desbloquear
+                                </button>
+                              )}
+                              {a.tiene_pin ? (
+                                <button className="btn btn--danger btn--sm" onClick={() => blanquear(a)}>
+                                  Blanquear PIN
+                                </button>
+                              ) : (
+                                <button className="btn btn--ghost btn--sm" onClick={() => generar(a)}>
+                                  {a.alta_pendiente ? 'Generar otro código' : 'Generar código de alta'}
+                                </button>
+                              )}
+                              <button className="btn btn--danger btn--sm" onClick={() => darDeBaja(a)}>
+                                Dar de baja
+                              </button>
+                            </>
                           )}
                         </div>
                       ) : (

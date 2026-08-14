@@ -21,18 +21,22 @@ def verificar_clave_admin():
 
 @bp.route('/autorizados', methods=['GET'])
 def listar():
-    """Listado completo de autorizados (las 4 planillas)."""
+    """Listado de autorizados (las 4 planillas). Con ?todos=1 incluye a los dados de
+    baja (para el panel de administración)."""
     lista = request.args.get('lista')
+    incluir_inactivos = request.args.get('todos') == '1'
     conn = get_db()
     try:
         sql = ('SELECT id, nombre, cargo, lista, monto_autorizado, conceptos, bloqueado_hasta, '
-               '(pin_hash IS NOT NULL) AS tiene_pin, '
-               '(codigo_alta_hash IS NOT NULL) AS alta_pendiente FROM autorizados WHERE activo = 1')
+               'activo, (pin_hash IS NOT NULL) AS tiene_pin, '
+               '(codigo_alta_hash IS NOT NULL) AS alta_pendiente FROM autorizados WHERE 1=1')
         params = []
+        if not incluir_inactivos:
+            sql += ' AND activo = 1'
         if lista:
             sql += ' AND lista = ?'
             params.append(lista)
-        sql += ' ORDER BY lista, nombre'
+        sql += ' ORDER BY activo DESC, lista, nombre'
         rows = conn.execute(sql, params).fetchall()
     finally:
         conn.close()
@@ -48,12 +52,32 @@ def listar():
             'monto_autorizado': r['monto_autorizado'],
             'sin_limite': r['monto_autorizado'] is None,
             'conceptos': r['conceptos'],
+            'activo': bool(r['activo']),
             'tiene_pin': bool(r['tiene_pin']),
             'alta_pendiente': bool(r['alta_pendiente']),
             'bloqueado': bloqueado,
             'bloqueado_minutos': minutos,
         })
     return jsonify(salida)
+
+
+@bp.route('/autorizados/<int:autorizado_id>/activo', methods=['POST'])
+@requiere_admin
+def cambiar_activo(autorizado_id):
+    """Da de baja (activo=0) o reactiva (activo=1) a un autorizante. La fila no se borra:
+    se conserva el historial de lo que haya firmado. Un inactivo no aparece para firmar."""
+    data = request.get_json(silent=True) or {}
+    activo = 1 if data.get('activo') else 0
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT nombre FROM autorizados WHERE id = ?', (autorizado_id,)).fetchone()
+        if not row:
+            return jsonify({'error': 'El autorizado no existe'}), 404
+        conn.execute('UPDATE autorizados SET activo = ? WHERE id = ?', (activo, autorizado_id))
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({'ok': True, 'activo': bool(activo), 'nombre': row['nombre']})
 
 
 @bp.route('/autorizados/<int:autorizado_id>/codigo-alta', methods=['POST'])

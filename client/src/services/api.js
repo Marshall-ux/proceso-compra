@@ -105,8 +105,21 @@ export const autorizar = (id, payload) =>
 export const quitarAutorizacion = (id, autorizacionId) =>
   pedir(`/solicitudes/${id}/autorizaciones/${autorizacionId}`, { method: 'DELETE' })
 
-export const listarAutorizados = (lista) =>
-  pedir(`/autorizados${lista ? `?lista=${lista}` : ''}`)
+export const listarAutorizados = (lista, todos = false) => {
+  const qs = new URLSearchParams()
+  if (lista) qs.set('lista', lista)
+  if (todos) qs.set('todos', '1')
+  const s = qs.toString()
+  return pedir(`/autorizados${s ? `?${s}` : ''}`)
+}
+
+// Baja (activo=false) o reactivación (activo=true) de un autorizante.
+export const cambiarActivoAutorizado = (autorizadoId, activo) =>
+  pedir(`/autorizados/${autorizadoId}/activo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+    body: JSON.stringify({ activo }),
+  })
 
 export const autorizarLote = (payload) =>
   pedir('/solicitudes/autorizar-lote', {

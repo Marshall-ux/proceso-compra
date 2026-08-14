@@ -198,3 +198,11 @@ def _seed_autorizados(conn):
                 'INSERT INTO autorizados (nombre, cargo, lista, monto_autorizado, conceptos) VALUES (?, ?, ?, ?, ?)',
                 (a['nombre'], a['cargo'], a['lista'], a['monto_autorizado'], a['conceptos']),
             )
+
+    # El roster (esta lista) es la fuente de verdad de quién es autorizante. A quien ya
+    # no figura acá (bajas), se lo deja inactivo; no se borra, para conservar su historial.
+    # El activo/inactivo de quienes SÍ están en el roster lo maneja el panel de admin.
+    nombres = [a['nombre'] for a in AUTORIZADOS]
+    marcadores = ', '.join('?' * len(nombres))
+    conn.execute(
+        f'UPDATE autorizados SET activo = 0 WHERE nombre NOT IN ({marcadores})', nombres)
