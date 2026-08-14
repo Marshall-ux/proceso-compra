@@ -17,6 +17,11 @@ export default function DetallePage() {
   const [error, setError] = useState('')
   const [errores, setErrores] = useState([])
   const [guardando, setGuardando] = useState(false)
+  const [borrando, setBorrando] = useState(false)      // muestra el modal de motivo
+  const [motivo, setMotivo] = useState('')
+  const [eliminadoPor, setEliminadoPor] = useState('')
+  const [errorBorrar, setErrorBorrar] = useState('')
+  const [confirmando, setConfirmando] = useState(false)
 
   const cargar = useCallback(async () => {
     try {
@@ -54,10 +59,21 @@ export default function DetallePage() {
     }
   }
 
-  const borrar = async () => {
-    if (!confirm('¿Eliminar esta solicitud? No se puede deshacer.')) return
-    await eliminarSolicitud(id)
-    navigate('/')
+  const confirmarBorrado = async () => {
+    setErrorBorrar('')
+    if (!motivo.trim()) {
+      setErrorBorrar('El motivo es obligatorio: dejá registrado por qué se elimina.')
+      return
+    }
+    setConfirmando(true)
+    try {
+      await eliminarSolicitud(id, { motivo: motivo.trim(), eliminado_por: eliminadoPor.trim() })
+      navigate('/')
+    } catch (e) {
+      setErrorBorrar(e.message)
+    } finally {
+      setConfirmando(false)
+    }
   }
 
   return (
@@ -116,10 +132,14 @@ export default function DetallePage() {
       <div className="card">
         <div className="toolbar" style={{ marginBottom: editando ? '1.2rem' : 0 }}>
           <div className="card__title" style={{ marginBottom: 0 }}>📋 Datos de la autorización</div>
-          {!completa && !editando && (
+          {!editando && (
             <div className="toolbar__actions">
-              <button className="btn btn--ghost btn--sm" onClick={empezarEdicion}>Editar</button>
-              <button className="btn btn--danger btn--sm" onClick={borrar}>Eliminar</button>
+              {!completa && (
+                <button className="btn btn--ghost btn--sm" onClick={empezarEdicion}>Editar</button>
+              )}
+              <button className="btn btn--danger btn--sm" onClick={() => { setBorrando(true); setMotivo(''); setEliminadoPor(''); setErrorBorrar('') }}>
+                Eliminar
+              </button>
             </div>
           )}
         </div>
@@ -150,6 +170,48 @@ export default function DetallePage() {
           <iframe className="visor" src={urlPdf(solicitud.id)} title={`Autorización ${solicitud.id}`} />
         )}
       </div>
+
+      {borrando && (
+        <div className="modal-fondo" onClick={() => !confirmando && setBorrando(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="card__title" style={{ marginBottom: '0.3rem' }}>🗑️ Eliminar solicitud #{solicitud.id}</div>
+            <p className="card__hint">
+              La solicitud se elimina de la lista, pero queda registrada en el historial de
+              eliminaciones con este motivo. No se puede deshacer.
+            </p>
+            {completa && (
+              <div className="alert alert--warning">
+                Ojo: esta solicitud ya está <strong>autorizada</strong>. Aun así se puede eliminar,
+                y va a quedar el acta del motivo.
+              </div>
+            )}
+            {errorBorrar && <div className="alert alert--error">{errorBorrar}</div>}
+            <div className="field">
+              <label>Motivo de la eliminación <span style={{ color: 'var(--danger)' }}>*</span></label>
+              <textarea
+                autoFocus value={motivo} onChange={(e) => setMotivo(e.target.value)}
+                placeholder="Ej: cargada por error, factura duplicada, se anuló la compra…"
+              />
+            </div>
+            <div className="field">
+              <label>Tu nombre (para el registro)</label>
+              <input
+                type="text" value={eliminadoPor} onChange={(e) => setEliminadoPor(e.target.value)}
+                placeholder="Quién elimina"
+              />
+            </div>
+            <div className="toolbar" style={{ marginBottom: 0, marginTop: '0.6rem' }}>
+              <button className="btn btn--ghost" onClick={() => setBorrando(false)} disabled={confirmando}>
+                Cancelar
+              </button>
+              <button className="btn btn--danger-solid" onClick={confirmarBorrado}
+                      disabled={confirmando || !motivo.trim()}>
+                {confirmando ? <><span className="spinner" /> Eliminando…</> : 'Eliminar definitivamente'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

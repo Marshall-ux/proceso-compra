@@ -86,7 +86,14 @@ export const actualizarSolicitud = (id, datos) =>
     body: JSON.stringify(datos),
   })
 
-export const eliminarSolicitud = (id) => pedir(`/solicitudes/${id}`, { method: 'DELETE' })
+export const eliminarSolicitud = (id, payload) =>
+  pedir(`/solicitudes/${id}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+export const listarEliminaciones = () => pedir('/eliminaciones')
 
 export const autorizar = (id, payload) =>
   pedir(`/solicitudes/${id}/autorizar`, {

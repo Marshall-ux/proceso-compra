@@ -176,6 +176,8 @@ a { color: var(--green-dark); text-decoration: none; }
 .btn--ghost:hover:not(:disabled) { background: var(--bg-alt); }
 .btn--danger { background: transparent; color: var(--danger); border-color: transparent; padding: 0.4rem 0.6rem; }
 .btn--danger:hover:not(:disabled) { background: var(--danger-soft); }
+.btn--danger-solid { background: var(--danger); color: #fff; }
+.btn--danger-solid:hover:not(:disabled) { background: #d63030; }
 .btn--sm { padding: 0.4rem 0.8rem; font-size: 0.85rem; }
 
 /* ----------------------------- form ------------------------------------- */
@@ -385,6 +387,23 @@ table.data { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
   color: var(--green-dark);
   user-select: all;
 }
+
+/* ------------------------------- modal ---------------------------------- */
+.modal-fondo {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(15, 26, 21, 0.45);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1.5rem;
+}
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgba(16, 28, 44, 0.25);
+  padding: 1.5rem;
+  width: 100%; max-width: 460px;
+}
+.modal .field { margin-top: 0.9rem; }
 
 /* ----------------------------- adjuntos --------------------------------- */
 .adjunto {

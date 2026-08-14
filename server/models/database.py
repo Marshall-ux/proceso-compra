@@ -104,6 +104,26 @@ CREATE TABLE IF NOT EXISTS autorizaciones (
     UNIQUE (solicitud_id, autorizado_id)
 );
 
+-- Acta de eliminación: al borrar una solicitud se guarda acá una copia de sus
+-- datos clave + el motivo, para tener trazabilidad de qué se borró y por qué.
+CREATE TABLE IF NOT EXISTS eliminaciones (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    solicitud_id      INTEGER,                 -- id original (la fila ya no existe)
+    proveedor_nombre  TEXT NOT NULL DEFAULT '',
+    cuit              TEXT NOT NULL DEFAULT '',
+    marca             TEXT NOT NULL DEFAULT '',
+    empresa           TEXT NOT NULL DEFAULT '',
+    monto_total       REAL NOT NULL DEFAULT 0,
+    estado            TEXT NOT NULL DEFAULT '',   -- estado que tenía al borrarse
+    fecha_factura     TEXT NOT NULL DEFAULT '',
+    factura_numero    TEXT NOT NULL DEFAULT '',
+    solicitado_por    TEXT NOT NULL DEFAULT '',
+    firmas            INTEGER NOT NULL DEFAULT 0,
+    motivo            TEXT NOT NULL,
+    eliminado_por     TEXT NOT NULL DEFAULT '',
+    fecha             TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_items_solicitud ON items(solicitud_id);
 CREATE INDEX IF NOT EXISTS idx_auth_solicitud ON autorizaciones(solicitud_id);
 """

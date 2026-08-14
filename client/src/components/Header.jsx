@@ -13,6 +13,7 @@ export default function Header() {
           <NavLink to="/" end className={clase}>Solicitudes</NavLink>
           <NavLink to="/nueva" className={clase}>Nueva</NavLink>
           <NavLink to="/autorizados" className={clase}>Autorizados</NavLink>
+          <NavLink to="/eliminadas" className={clase}>Eliminadas</NavLink>
         </nav>
       </div>
     </header>

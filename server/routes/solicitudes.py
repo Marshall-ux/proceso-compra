@@ -54,9 +54,19 @@ def actualizar(solicitud_id):
 
 @bp.route('/solicitudes/<int:solicitud_id>', methods=['DELETE'])
 def eliminar(solicitud_id):
-    if not svc.eliminar(solicitud_id):
-        return jsonify({'error': 'La solicitud no existe'}), 404
+    """Elimina la solicitud dejando acta del motivo. El motivo es obligatorio."""
+    data = request.get_json(silent=True) or {}
+    ok, error = svc.eliminar(solicitud_id, data.get('motivo'), data.get('eliminado_por'))
+    if not ok:
+        codigo = 404 if error == 'La solicitud no existe' else 400
+        return jsonify({'error': error}), codigo
     return jsonify({'ok': True})
+
+
+@bp.route('/eliminaciones', methods=['GET'])
+def eliminaciones():
+    """Registro de solicitudes eliminadas: qué, por qué, quién y cuándo."""
+    return jsonify(svc.listar_eliminaciones())
 
 
 @bp.route('/solicitudes/<int:solicitud_id>/autorizar', methods=['POST'])

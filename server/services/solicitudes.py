@@ -185,12 +185,42 @@ def listar(estado=None, busqueda=None):
         conn.close()
 
 
-def eliminar(solicitud_id):
+def eliminar(solicitud_id, motivo, eliminado_por=''):
+    """Borra una solicitud dejando acta en 'eliminaciones' (qué, por qué y quién).
+    El motivo es obligatorio. Devuelve (ok, error)."""
+    motivo = str(motivo or '').strip()
+    if not motivo:
+        return False, 'Indicá el motivo de la eliminación'
+
     conn = get_db()
     try:
-        cur = conn.execute('DELETE FROM solicitudes WHERE id = ?', (solicitud_id,))
+        s = conn.execute('SELECT * FROM solicitudes WHERE id = ?', (solicitud_id,)).fetchone()
+        if not s:
+            return False, 'La solicitud no existe'
+        firmas = conn.execute(
+            'SELECT COUNT(*) AS n FROM autorizaciones WHERE solicitud_id = ?',
+            (solicitud_id,)).fetchone()['n']
+
+        conn.execute(
+            'INSERT INTO eliminaciones (solicitud_id, proveedor_nombre, cuit, marca, empresa, '
+            'monto_total, estado, fecha_factura, factura_numero, solicitado_por, firmas, '
+            'motivo, eliminado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (s['id'], s['proveedor_nombre'], s['cuit'], s['marca'], s['empresa'],
+             s['monto_total'], s['estado'], s['fecha'], s['factura_numero'],
+             s['solicitado_por'], firmas, motivo, str(eliminado_por or '').strip()),
+        )
+        conn.execute('DELETE FROM solicitudes WHERE id = ?', (solicitud_id,))
         conn.commit()
-        return cur.rowcount > 0
+        return True, ''
+    finally:
+        conn.close()
+
+
+def listar_eliminaciones():
+    conn = get_db()
+    try:
+        return [_fila_a_dict(r) for r in
+                conn.execute('SELECT * FROM eliminaciones ORDER BY id DESC')]
     finally:
         conn.close()
 
