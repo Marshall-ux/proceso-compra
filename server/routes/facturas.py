@@ -77,6 +77,7 @@ def extraer():
     datos = {}
     items = []
     facturas = []
+    empresas = []       # empresas detectadas (una factura por empresa del grupo)
     monto_total = 0.0
     ilegibles = []
 
@@ -93,6 +94,8 @@ def extraer():
         for campo in _CAMPOS_PRIMERO:
             if not datos.get(campo) and d.get(campo):
                 datos[campo] = d[campo]
+        if d.get('empresa') and d['empresa'] not in empresas:
+            empresas.append(d['empresa'])
         monto_total += float(d.get('monto_total') or 0)
         items.extend(resultado.get('items', []) or [])
         facturas.append({
@@ -106,6 +109,9 @@ def extraer():
     datos['monto_total'] = round(monto_total, 2)
     # Compatibilidad: el primer numero de factura queda tambien en el campo legacy.
     datos['factura_numero'] = facturas[0]['numero'] if facturas else ''
+    # Multi-empresa: se pre-tildan las empresas detectadas en las facturas.
+    datos['empresas'] = empresas
+    datos['empresa'] = empresas[0] if empresas else ''
 
     faltantes = ['marca', 'concepto', 'proveedor_tipo', 'tipo_orden', 'solicitado_por', 'criticidad']
     faltantes += [k for k in ('fecha', 'empresa', 'proveedor_nombre', 'cuit') if not datos.get(k)]

@@ -4,7 +4,8 @@ import FormularioSolicitud from '../components/FormularioSolicitud.jsx'
 import { crearSolicitud, extraerFacturas } from '../services/api.js'
 
 const VACIA = {
-  fecha: '', empresa: '', marca: '', marca_otro: '', proveedor_tipo: '', proveedor_nombre: '',
+  fecha: '', empresa: '', marca: '', empresas: [], marcas: [], marca_otro: '',
+  proveedor_tipo: '', proveedor_nombre: '',
   cuit: '', tipo_orden: '', duracion_orden: '', concepto: '', concepto_otro: '', monto_total: '',
   forma_pago: '', cbu: '', condicion_pago: '', condicion_dias: '', condicion_otras: '',
   contacto_nombre: '', contacto_telefono: '', contacto_mail: '', observaciones: '',

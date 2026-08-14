@@ -243,6 +243,9 @@ a { color: var(--green-dark); text-decoration: none; }
 .opcion:hover { border-color: var(--green); color: var(--text); }
 .opcion input { accent-color: var(--green); margin: 0; }
 .opcion--activa { background: var(--green-soft); border-color: var(--green); color: var(--green-dark); }
+button.opcion { font-family: inherit; font-size: 0.87rem; }
+.opcion--todas { font-weight: 700; color: var(--green-dark); border-style: dashed; }
+.opcion--todas.opcion--activa { border-style: solid; }
 
 /* ----------------------------- table ------------------------------------ */
 .toolbar {

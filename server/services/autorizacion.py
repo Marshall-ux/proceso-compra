@@ -5,11 +5,11 @@ varias en lote (en el lote el PIN se pide una sola vez, pero las reglas se
 aplican solicitud por solicitud).
 """
 
-from services.marcas import listas_para_marca
+from services.marcas import listas_habilitadas
 from services.pins import (
     MAX_INTENTOS, esta_bloqueado, momento_desbloqueo, registrar_intento, verificar_pin,
 )
-from services.solicitudes import AUTORIZACIONES_REQUERIDAS
+from services.solicitudes import AUTORIZACIONES_REQUERIDAS, marcas_de
 
 
 class ErrorAutorizante(Exception):
@@ -76,8 +76,10 @@ def firmar(conn, solicitud, autorizado):
     if solicitud['estado'] == 'autorizada':
         return False, 'Ya está autorizada', False
 
-    if autorizado['lista'] not in listas_para_marca(solicitud['marca']):
-        return False, f'{autorizado["nombre"]} no está habilitado para la marca {solicitud["marca"]}', False
+    marcas = marcas_de(solicitud)
+    if autorizado['lista'] not in listas_habilitadas(marcas):
+        detalle = marcas[0] if len(marcas) == 1 else 'esas marcas (requiere autorizante que las cubra todas)'
+        return False, f'{autorizado["nombre"]} no está habilitado para {detalle}', False
 
     ya = conn.execute(
         'SELECT 1 FROM autorizaciones WHERE solicitud_id = ? AND autorizado_id = ?',

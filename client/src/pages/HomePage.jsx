@@ -177,7 +177,14 @@ export default function HomePage() {
                         )}
                       </div>
                     </td>
-                    <td>{s.marca === 'OTRO' ? s.marca_otro || 'Otro' : s.marca}</td>
+                    <td>
+                      {s.marca === 'OTRO' ? s.marca_otro || 'Otro' : s.marca}
+                      {(() => {
+                        let n = 0
+                        try { n = JSON.parse(s.marcas || '[]').length } catch { n = 0 }
+                        return n > 1 ? <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}> +{n - 1}</span> : null
+                      })()}
+                    </td>
                     <td className="num">$ {fmtMoney(s.monto_total)}</td>
                     <td>
                       <span className={`badge ${s.firmas >= 2 ? 'badge--success' : 'badge--muted'}`}>

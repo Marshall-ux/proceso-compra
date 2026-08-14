@@ -5,6 +5,7 @@ import {
 import { subirCbu, subirLegajo } from '../services/api.js'
 import AdjuntoUploader from './AdjuntoUploader.jsx'
 import ItemsEditor from './ItemsEditor.jsx'
+import MultiOpciones from './MultiOpciones.jsx'
 import Opciones from './Opciones.jsx'
 
 // Reproduce el formulario F 8.4-01 Rev.07, en el mismo orden que el papel.
@@ -29,20 +30,26 @@ export default function FormularioSolicitud({ datos, onChange, autocompletados =
           </div>
         </div>
         <div style={{ marginTop: '0.9rem' }}>
-          <Opciones nombre="empresa" valor={datos.empresa} opciones={EMPRESAS} onChange={set('empresa')} />
+          <MultiOpciones nombre="empresas" valores={datos.empresas} opciones={EMPRESAS} onChange={set('empresas')} />
+        </div>
+        <div className="field__nota">
+          Podés tildar varias: cuando un mismo gasto se imputa a varias empresas del grupo.
         </div>
       </div>
 
       <div className="seccion">
         <div className="seccion__titulo">Marca</div>
-        <Opciones nombre="marca" valor={datos.marca} opciones={MARCAS} onChange={set('marca')} />
-        {datos.marca === 'OTRO' && (
+        <MultiOpciones nombre="marcas" valores={datos.marcas} opciones={MARCAS} onChange={set('marcas')} />
+        {(datos.marcas || []).includes('OTRO') && (
           <div className="field" style={{ marginTop: '0.7rem' }}>
             <label>¿Cuál?</label>
             <input type="text" value={datos.marca_otro || ''} onChange={setInput('marca_otro')} />
           </div>
         )}
-        <div className="field__nota">La marca define quiénes pueden autorizar esta compra.</div>
+        <div className="field__nota">
+          La marca define quiénes pueden autorizar. Si tildás varias, solo puede autorizar
+          quien las cubra todas (Multimarca o dirección).
+        </div>
       </div>
 
       <div className="seccion">

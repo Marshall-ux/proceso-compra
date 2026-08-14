@@ -1,7 +1,9 @@
 """Logica de negocio de las solicitudes (autorizaciones genericas)."""
 
+import json
+
 from models.database import get_db
-from services.marcas import listas_para_marca
+from services.marcas import listas_habilitadas
 from services.pins import esta_bloqueado
 
 AUTORIZACIONES_REQUERIDAS = 2
@@ -15,6 +17,8 @@ CAMPOS = (
     # V2
     'criticidad', 'criticidad_obs', 'requiere_oc', 'autopack_ok', 'cbu_imagen',
     'legajo_nombre', 'legajo_archivo',
+    # Multi-selección (JSON)
+    'empresas', 'marcas',
 )
 
 # Columnas numericas: se guardan como numero, no como texto.
@@ -24,12 +28,48 @@ CAMPOS_INT = {'autopack_ok'}
 CRITICIDADES = ('urgente', 'informado', 'otro')
 
 # Campos sin los que el formulario no tiene sentido enviar a autorizar.
-OBLIGATORIOS = ('fecha', 'empresa', 'marca', 'proveedor_nombre', 'proveedor_tipo', 'tipo_orden',
+OBLIGATORIOS = ('fecha', 'proveedor_nombre', 'proveedor_tipo', 'tipo_orden',
                 'concepto', 'solicitado_por', 'criticidad')
 
 
 def _fila_a_dict(row):
     return {k: row[k] for k in row.keys()}
+
+
+def lista_multi(datos, campo_lista, campo_scalar):
+    """Extrae una lista de valores limpia de la multi-selección (empresas/marcas),
+    aceptando tanto la lista nueva como el campo escalar viejo. Sin duplicados."""
+    val = datos.get(campo_lista)
+    if isinstance(val, str) and val.strip().startswith('['):
+        try:
+            val = json.loads(val)
+        except ValueError:
+            val = None
+    if isinstance(val, list):
+        crudos = [str(x).strip() for x in val]
+    else:
+        escalar = str(datos.get(campo_scalar) or '').strip()
+        crudos = [escalar] if escalar else []
+    vistos, salida = set(), []
+    for x in crudos:
+        if x and x not in vistos:
+            vistos.add(x)
+            salida.append(x)
+    return salida
+
+
+def _normalizar(datos):
+    """Devuelve una copia de datos con empresas/marcas como JSON y los escalares
+    empresa/marca fijados al primer valor (para búsqueda, listado y compatibilidad)."""
+    empresas = lista_multi(datos, 'empresas', 'empresa')
+    marcas = lista_multi(datos, 'marcas', 'marca')
+    return {
+        **datos,
+        'empresas': json.dumps(empresas, ensure_ascii=False),
+        'marcas': json.dumps(marcas, ensure_ascii=False),
+        'empresa': empresas[0] if empresas else '',
+        'marca': marcas[0] if marcas else '',
+    }
 
 
 def _valor(campo, datos):
@@ -51,9 +91,15 @@ def validar(datos):
     for campo in OBLIGATORIOS:
         if not str(datos.get(campo) or '').strip():
             errores.append(f'Falta completar: {campo.replace("_", " ")}')
+    empresas = lista_multi(datos, 'empresas', 'empresa')
+    marcas = lista_multi(datos, 'marcas', 'marca')
+    if not empresas:
+        errores.append('Seleccioná al menos una empresa a la que imputar el pago')
+    if not marcas:
+        errores.append('Seleccioná al menos una marca')
     if float(datos.get('monto_total') or 0) <= 0:
         errores.append('El monto presupuesto final debe ser mayor a cero')
-    if datos.get('marca') == 'OTRO' and not str(datos.get('marca_otro') or '').strip():
+    if 'OTRO' in marcas and not str(datos.get('marca_otro') or '').strip():
         errores.append('Indicá cuál es la marca en "Otro"')
     if datos.get('concepto') == 'otros' and not str(datos.get('concepto_otro') or '').strip():
         errores.append('Indicá cuál es el concepto en "Otros"')
@@ -71,6 +117,7 @@ def validar(datos):
 
 
 def crear(datos, items, facturas=None):
+    datos = _normalizar(datos)
     conn = get_db()
     try:
         valores = [_valor(c, datos) for c in CAMPOS]
@@ -95,6 +142,7 @@ def actualizar(solicitud_id, datos, items, facturas=None):
             return False, 'La solicitud no existe'
         if row['estado'] == 'autorizada':
             return False, 'La solicitud ya está autorizada y no se puede modificar'
+        datos = _normalizar(datos)
         # Si alguien ya firmó, editar cambiaría lo que firmó: se limpian las firmas.
         conn.execute('DELETE FROM autorizaciones WHERE solicitud_id = ?', (solicitud_id,))
         sets = ', '.join(f'{c} = ?' for c in CAMPOS)
@@ -141,6 +189,9 @@ def obtener(solicitud_id):
         if not row:
             return None
         solicitud = _fila_a_dict(row)
+        # Las listas se devuelven parseadas (con fallback al escalar de solicitudes viejas).
+        solicitud['empresas'] = lista_multi(solicitud, 'empresas', 'empresa')
+        solicitud['marcas'] = lista_multi(solicitud, 'marcas', 'marca')
         solicitud['items'] = [
             _fila_a_dict(r) for r in
             conn.execute('SELECT * FROM items WHERE solicitud_id = ? ORDER BY orden', (solicitud_id,))
@@ -225,10 +276,16 @@ def listar_eliminaciones():
         conn.close()
 
 
+def marcas_de(solicitud):
+    """Lista de marcas de una solicitud, sea dict o fila (con fallback al escalar)."""
+    return lista_multi(dict(solicitud) if not isinstance(solicitud, dict) else solicitud,
+                       'marcas', 'marca')
+
+
 def autorizados_para(solicitud):
-    """Autorizados habilitados para la marca de la solicitud, marcando quien excede su tope
-    y quien ya firmó."""
-    listas = listas_para_marca(solicitud['marca'])
+    """Autorizados habilitados para la(s) marca(s) de la solicitud, marcando quien excede
+    su tope y quien ya firmó. Con varias marcas, solo quien las cubra todas."""
+    listas = listas_habilitadas(marcas_de(solicitud))
     monto = float(solicitud['monto_total'] or 0)
     ya_firmaron = {a['nombre'] for a in solicitud['autorizaciones']}
     conn = get_db()

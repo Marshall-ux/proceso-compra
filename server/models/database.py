@@ -71,6 +71,8 @@ CREATE TABLE IF NOT EXISTS solicitudes (
     cbu_imagen          TEXT NOT NULL DEFAULT '',    -- archivo JPG del CBU
     legajo_nombre       TEXT NOT NULL DEFAULT '',
     legajo_archivo      TEXT NOT NULL DEFAULT '',    -- PDF del legajo impositivo
+    empresas            TEXT NOT NULL DEFAULT '',    -- JSON: multi-selección de empresas
+    marcas              TEXT NOT NULL DEFAULT '',    -- JSON: multi-selección de marcas
     created_at          TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     updated_at          TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
@@ -146,6 +148,10 @@ _COLUMNAS_V2 = {
     'cbu_imagen': "TEXT NOT NULL DEFAULT ''",
     'legajo_nombre': "TEXT NOT NULL DEFAULT ''",
     'legajo_archivo': "TEXT NOT NULL DEFAULT ''",
+    # Multi-selección de empresa y marca (JSON). Los campos escalares empresa/marca
+    # se mantienen con el primer valor, para compatibilidad y para búsqueda/listado.
+    'empresas': "TEXT NOT NULL DEFAULT ''",
+    'marcas': "TEXT NOT NULL DEFAULT ''",
 }
 
 

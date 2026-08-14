@@ -293,8 +293,11 @@ def _casilleros_marcados(solicitud):
         if clave in mapa:
             marcados.add(mapa[clave])
 
-    marcar(EMPRESAS, solicitud.get('empresa'))
-    marcar(MARCAS, solicitud.get('marca'))
+    # Empresa y marca pueden ser varias (se tildan todas las seleccionadas).
+    for empresa in (solicitud.get('empresas') or [solicitud.get('empresa')]):
+        marcar(EMPRESAS, empresa)
+    for marca in (solicitud.get('marcas') or [solicitud.get('marca')]):
+        marcar(MARCAS, marca)
     marcar(PROVEEDOR_TIPO, solicitud.get('proveedor_tipo'))
     marcar(TIPO_ORDEN, solicitud.get('tipo_orden'))
     marcar(CONCEPTOS, solicitud.get('concepto'))
@@ -329,7 +332,7 @@ def _completar_overlay(solicitud):
 
     ov.campo(CAMPO_FECHA, solicitud.get('fecha'), bold=True)
 
-    if solicitud.get('marca') == 'OTRO':
+    if 'OTRO' in (solicitud.get('marcas') or [solicitud.get('marca')]):
         ov.campo(CAMPO_MARCA_OTRO, solicitud.get('marca_otro'))
 
     ov.campo(CAMPO_PROVEEDOR, solicitud.get('proveedor_nombre'), bold=True)
