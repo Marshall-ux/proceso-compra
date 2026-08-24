@@ -27,6 +27,8 @@ _LISTAS_POR_MARCA = {
     'FCA': ['jeep'],           # la planilla "JEEP" es la de Chrysler/FCA
     'KIA': ['kia'],
     'SUZUKI': ['kia'],         # la planilla KIA cubre explicitamente Kia / Suzuki
+    'HONDA': ['honda'],
+    'BYD': ['byd'],
 }
 
 

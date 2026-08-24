@@ -201,4 +201,85 @@ AUTORIZADOS = [
         'monto_autorizado': None,  # SIN LIMITE
         'conceptos': 'TODOS LOS CONCEPTOS',
     },
+
+    # ---------------------------- MARKETING ---------------------------------
+    {
+        'nombre': 'Virginia Lottero',
+        'cargo': 'Gerente de MKT',
+        'lista': 'multimarca',
+        'monto_autorizado': 8000000.00,  # el mayor de sus topes por concepto
+        'conceptos': 'Marketing. Topes por concepto: Fee agencia de publicidad / Tep (Tadinac) / '
+                     'diseños y anuncios hasta $2.000.000; Selección Digital SA / fondeo MKT digital '
+                     'hasta $8.000.000; Merchandising sucursales (regalos 0km, tablas, parasoles) '
+                     'hasta $8.000.000; Materiales para eventos (flagbanner, sombrillas, gazebos) '
+                     'hasta $2.000.000; Material POP (tarjetas, folletería, carteles) hasta '
+                     '$1.000.000; Coberturas audiovisuales (radio, influencer) hasta $500.000. '
+                     'Requiere Director para: campañas especiales (aniversarios, mundial, etc.), '
+                     'viajes/hospedajes/pasajes, eventos > $3.000.000 y publicidad > $1.000.000.',
+    },
+
+    # -------------------------- SANTA FE (Honda / BYD / KIA) -----------------
+    {
+        'nombre': 'German R. Bru',
+        'cargo': 'Gerente de Ventas Honda (Santa Fe)',
+        'lista': 'honda',
+        'monto_autorizado': 5000000.00,
+        'conceptos': 'Todo lo relativo a su operacion comercial a cargo, descuentos, accesorios, '
+                     'gastos de MKT y todo lo relativo al ejercicio de la marca.',
+    },
+    {
+        'nombre': 'Dora Ubiergo',
+        'cargo': 'Gerente de ventas BYD (Santa Fe)',
+        'lista': 'byd',
+        'monto_autorizado': 5000000.00,
+        'conceptos': 'Todo lo relativo a su operacion comercial a cargo, descuentos, accesorios, '
+                     'gastos de MKT y todo lo relativo al ejercicio comercial de la marca.',
+    },
+    {
+        'nombre': 'Luciana Harik',
+        'cargo': 'Asesora comercial (Santa Fe)',
+        'lista': 'byd',
+        'monto_autorizado': 1000000.00,
+        'conceptos': 'Todo lo relativo a compras de articulos de libreria, higiene y almacen, '
+                     'gestion de calidad y medio ambiente.',
+    },
+    {
+        'nombre': 'Cesar Bourquin',
+        'cargo': 'Asesor de taller y servicios KIA (Santa Fe)',
+        'lista': 'kia',
+        'monto_autorizado': 2500000.00,
+        'conceptos': 'Todo lo relativo a post venta de las distintas razones sociales (Neostar, '
+                     'Hikari, Alco Rosario, Daseos, Xinoxia) de Santa Fe.',
+    },
+    {
+        'nombre': 'Barbara Ayala',
+        'cargo': 'Responsable Administracion Santa Fe',
+        'lista': 'multimarca',
+        'monto_autorizado': 2500000.00,
+        'conceptos': 'Todo lo relativo a articulos, elementos y utiles, compra de formularios ACARA, '
+                     'solicitud de facturas, recibos y otros utiles de Adm y Fzas. (Santa Fe)',
+    },
+    {
+        'nombre': 'Marisol Gonzalez',
+        'cargo': 'Control Interno Honda (Santa Fe)',
+        'lista': 'multimarca',
+        'monto_autorizado': 2500000.00,
+        'conceptos': 'Todo lo relativo a articulos, elementos y utiles, compra de formularios ACARA, '
+                     'solicitud de facturas, recibos y otros utiles de Adm y Fzas. (Santa Fe)',
+    },
+    {
+        'nombre': 'Roman Cabrera',
+        'cargo': 'Gerente de post venta General (Santa Fe)',
+        'lista': 'multimarca',
+        'monto_autorizado': 5000000.00,
+        'conceptos': 'Todo lo relativo a post venta de las distintas razones sociales (Neostar, '
+                     'Hikari, Alco Rosario, Daseos, Xinoxia) de Santa Fe. Tope para BYD: $3.500.000.',
+    },
+    {
+        'nombre': 'Sergio Vazquez',
+        'cargo': 'DIRECTOR (Santa Fe)',
+        'lista': 'multimarca',
+        'monto_autorizado': None,  # SIN LIMITE
+        'conceptos': 'TODOS LOS CONCEPTOS',
+    },
 ]

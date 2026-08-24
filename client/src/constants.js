@@ -60,6 +60,8 @@ export const LISTAS = {
   nissan: 'Nissan',
   jeep: 'Jeep / Chrysler',
   kia: 'Kia',
+  honda: 'Honda',
+  byd: 'BYD',
   multimarca: 'Multimarca',
 }
 
