@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { LISTAS, fmtFechaHora, fmtMoney } from '../constants.js'
-import { autorizar, definirPin } from '../services/api.js'
+import { autorizar, definirPin, quitarAutorizacion } from '../services/api.js'
 
 // Panel de firmas: el proceso exige DOS autorizantes distintos.
 export default function PanelAutorizacion({ solicitud, onActualizar }) {
@@ -25,6 +25,16 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
   const elegir = (a) => {
     setElegido(a); setPin(''); setCodigo(''); setPinNuevo(''); setPinRepetido('')
     setError(''); setAviso('')
+  }
+
+  const quitar = async (f) => {
+    setError(''); setAviso('')
+    if (!confirm(`¿Quitar la firma de ${f.nombre}? Va a tener que volver a autorizar.`)) return
+    try {
+      onActualizar(await quitarAutorizacion(solicitud.id, f.id))
+    } catch (e) {
+      setError(e.message)
+    }
   }
 
   const firmar = async () => {
@@ -84,6 +94,15 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
                     <div className="badge badge--warning" style={{ marginTop: '0.4rem' }}>
                       Excedió su tope de $ {fmtMoney(f.monto_tope)}
                     </div>
+                  )}
+                  {!completa && (
+                    <button
+                      className="btn btn--danger btn--sm" style={{ marginTop: '0.5rem' }}
+                      onClick={() => quitar(f)}
+                      title="Deshacer esta firma (por ejemplo, si autorizó por error)"
+                    >
+                      ✕ Quitar firma
+                    </button>
                   )}
                 </>
               ) : (

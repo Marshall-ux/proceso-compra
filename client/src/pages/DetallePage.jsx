@@ -20,6 +20,7 @@ export default function DetallePage() {
   const [borrando, setBorrando] = useState(false)      // muestra el modal de motivo
   const [motivo, setMotivo] = useState('')
   const [eliminadoPor, setEliminadoPor] = useState('')
+  const [claveBorrar, setClaveBorrar] = useState('')   // clave admin (solo autorizadas)
   const [errorBorrar, setErrorBorrar] = useState('')
   const [confirmando, setConfirmando] = useState(false)
 
@@ -65,9 +66,15 @@ export default function DetallePage() {
       setErrorBorrar('El motivo es obligatorio: dejá registrado por qué se elimina.')
       return
     }
+    // Una solicitud ya autorizada solo la puede eliminar administración con la clave.
+    if (completa && !claveBorrar.trim()) {
+      setErrorBorrar('Está autorizada: ingresá la clave de administración para eliminarla.')
+      return
+    }
     setConfirmando(true)
     try {
-      await eliminarSolicitud(id, { motivo: motivo.trim(), eliminado_por: eliminadoPor.trim() })
+      await eliminarSolicitud(id, { motivo: motivo.trim(), eliminado_por: eliminadoPor.trim() },
+                              completa ? claveBorrar.trim() : undefined)
       navigate('/')
     } catch (e) {
       setErrorBorrar(e.message)
@@ -132,10 +139,12 @@ export default function DetallePage() {
       <div className="card">
         <div className="toolbar" style={{ marginBottom: editando ? '1.2rem' : 0 }}>
           <div className="card__title" style={{ marginBottom: 0 }}>📋 Datos de la autorización</div>
-          {!editando && !completa && (
+          {!editando && (
             <div className="toolbar__actions">
-              <button className="btn btn--ghost btn--sm" onClick={empezarEdicion}>Editar</button>
-              <button className="btn btn--danger btn--sm" onClick={() => { setBorrando(true); setMotivo(''); setEliminadoPor(''); setErrorBorrar('') }}>
+              {!completa && (
+                <button className="btn btn--ghost btn--sm" onClick={empezarEdicion}>Editar</button>
+              )}
+              <button className="btn btn--danger btn--sm" onClick={() => { setBorrando(true); setMotivo(''); setEliminadoPor(''); setClaveBorrar(''); setErrorBorrar('') }}>
                 Eliminar
               </button>
             </div>
@@ -177,6 +186,12 @@ export default function DetallePage() {
               La solicitud se elimina de la lista, pero queda registrada en el historial de
               eliminaciones con este motivo. No se puede deshacer.
             </p>
+            {completa && (
+              <div className="alert alert--warning">
+                Esta solicitud está <strong>autorizada</strong>. Solo administración puede eliminarla,
+                con la clave.
+              </div>
+            )}
             {errorBorrar && <div className="alert alert--error">{errorBorrar}</div>}
             <div className="field">
               <label>Motivo de la eliminación <span style={{ color: 'var(--danger)' }}>*</span></label>
@@ -192,12 +207,21 @@ export default function DetallePage() {
                 placeholder="Quién elimina"
               />
             </div>
+            {completa && (
+              <div className="field">
+                <label>Clave de administración <span style={{ color: 'var(--danger)' }}>*</span></label>
+                <input
+                  type="password" value={claveBorrar} onChange={(e) => setClaveBorrar(e.target.value)}
+                  placeholder="Requerida para eliminar una autorizada"
+                />
+              </div>
+            )}
             <div className="toolbar" style={{ marginBottom: 0, marginTop: '0.6rem' }}>
               <button className="btn btn--ghost" onClick={() => setBorrando(false)} disabled={confirmando}>
                 Cancelar
               </button>
               <button className="btn btn--danger-solid" onClick={confirmarBorrado}
-                      disabled={confirmando || !motivo.trim()}>
+                      disabled={confirmando || !motivo.trim() || (completa && !claveBorrar.trim())}>
                 {confirmando ? <><span className="spinner" /> Eliminando…</> : 'Eliminar definitivamente'}
               </button>
             </div>

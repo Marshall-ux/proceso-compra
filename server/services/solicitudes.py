@@ -236,9 +236,10 @@ def listar(estado=None, busqueda=None):
         conn.close()
 
 
-def eliminar(solicitud_id, motivo, eliminado_por=''):
+def eliminar(solicitud_id, motivo, eliminado_por='', es_admin=False):
     """Borra una solicitud dejando acta en 'eliminaciones' (qué, por qué y quién).
-    El motivo es obligatorio. Devuelve (ok, error)."""
+    El motivo es obligatorio. Una solicitud ya autorizada solo la puede eliminar
+    administración (es_admin). Devuelve (ok, error)."""
     motivo = str(motivo or '').strip()
     if not motivo:
         return False, 'Indicá el motivo de la eliminación'
@@ -248,8 +249,8 @@ def eliminar(solicitud_id, motivo, eliminado_por=''):
         s = conn.execute('SELECT * FROM solicitudes WHERE id = ?', (solicitud_id,)).fetchone()
         if not s:
             return False, 'La solicitud no existe'
-        if s['estado'] == 'autorizada':
-            return False, 'Una solicitud ya autorizada no se puede eliminar'
+        if s['estado'] == 'autorizada' and not es_admin:
+            return False, 'Una solicitud autorizada solo la puede eliminar administración (con la clave)'
         firmas = conn.execute(
             'SELECT COUNT(*) AS n FROM autorizaciones WHERE solicitud_id = ?',
             (solicitud_id,)).fetchone()['n']

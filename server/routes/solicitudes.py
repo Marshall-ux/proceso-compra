@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, request, send_file
 
 from models.database import get_db
 from services import solicitudes as svc
+from services.admin import verificar_admin
 from services.autorizacion import ErrorAutorizante, firmar, verificar_autorizante
 from services.paquete import armar_zip, armar_zip_lote, nombre_zip
 from services.pdf_fill import fmt_money, generar_pdf, generar_pdf_con_facturas
@@ -54,11 +55,19 @@ def actualizar(solicitud_id):
 
 @bp.route('/solicitudes/<int:solicitud_id>', methods=['DELETE'])
 def eliminar(solicitud_id):
-    """Elimina la solicitud dejando acta del motivo. El motivo es obligatorio."""
+    """Elimina la solicitud dejando acta del motivo. El motivo es obligatorio. Las ya
+    autorizadas solo las puede eliminar administración (clave X-Admin-Password)."""
     data = request.get_json(silent=True) or {}
-    ok, error = svc.eliminar(solicitud_id, data.get('motivo'), data.get('eliminado_por'))
+    es_admin = verificar_admin(request.headers.get('X-Admin-Password', ''))
+    ok, error = svc.eliminar(solicitud_id, data.get('motivo'), data.get('eliminado_por'),
+                             es_admin=es_admin)
     if not ok:
-        codigo = 404 if error == 'La solicitud no existe' else 400
+        if error == 'La solicitud no existe':
+            codigo = 404
+        elif 'administración' in error:
+            codigo = 403
+        else:
+            codigo = 400
         return jsonify({'error': error}), codigo
     return jsonify({'ok': True})
 
@@ -188,7 +197,9 @@ def quitar_autorizacion(solicitud_id, autorizacion_id):
         conn.commit()
     finally:
         conn.close()
-    return jsonify(svc.obtener(solicitud_id))
+    resultado = svc.obtener(solicitud_id)
+    resultado['autorizados_disponibles'] = svc.autorizados_para(resultado)
+    return jsonify(resultado)
 
 
 @bp.route('/solicitudes/<int:solicitud_id>/pdf', methods=['GET'])

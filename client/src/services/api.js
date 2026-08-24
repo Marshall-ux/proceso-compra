@@ -86,10 +86,11 @@ export const actualizarSolicitud = (id, datos) =>
     body: JSON.stringify(datos),
   })
 
-export const eliminarSolicitud = (id, payload) =>
+// Para eliminar una solicitud ya autorizada hace falta la clave de administración.
+export const eliminarSolicitud = (id, payload, clave) =>
   pedir(`/solicitudes/${id}`, {
     method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Password': clave || claveAdmin() },
     body: JSON.stringify(payload),
   })
 
