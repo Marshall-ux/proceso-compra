@@ -127,7 +127,7 @@ AUTORIZADOS = [
     {
         'nombre': 'Ignacio Vazquez',
         'cargo': 'DIRECTOR Gerente de marca KIA',
-        'lista': 'kia',
+        'lista': 'multimarca',  # su planilla dice "y demas marcas": autoriza cualquier marca
         'monto_autorizado': None,  # SIN LIMITE
         'conceptos': 'Todo lo relativo a la marca Kia (Servicios y Post venta) y demas marcas, '
                      'en lo referente de gestion comercial.',
