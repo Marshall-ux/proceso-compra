@@ -230,7 +230,7 @@ AUTORIZADOS = [
     {
         'nombre': 'Dora Ubiergo',
         'cargo': 'Gerente de ventas BYD (Santa Fe)',
-        'lista': 'byd',
+        'lista': 'multimarca',  # pedido: que pueda autorizar cualquier marca
         'monto_autorizado': 5000000.00,
         'conceptos': 'Todo lo relativo a su operacion comercial a cargo, descuentos, accesorios, '
                      'gastos de MKT y todo lo relativo al ejercicio comercial de la marca.',
