@@ -118,7 +118,7 @@ AUTORIZADOS = [
     {
         'nombre': 'Diego Gobetto',
         'cargo': 'Jefe de Post Venta KIA',
-        'lista': 'kia',
+        'lista': 'multimarca',  # pedido: puede autorizar cualquier marca
         'monto_autorizado': 2500000.00,
         'conceptos': 'Todo lo relativo a servicios de la marca Kia y Suzuki. Ej: Serv de 3ros, '
                      'arreglos de chaperia, etc. Tambien lo relativo a ropa de trabajo, '
@@ -126,7 +126,7 @@ AUTORIZADOS = [
     },
     {
         'nombre': 'Ignacio Vazquez',
-        'cargo': 'DIRECTOR Gerente de marca KIA',
+        'cargo': 'Gerente de BYD',
         'lista': 'multimarca',  # su planilla dice "y demas marcas": autoriza cualquier marca
         'monto_autorizado': None,  # SIN LIMITE
         'conceptos': 'Todo lo relativo a la marca Kia (Servicios y Post venta) y demas marcas, '
