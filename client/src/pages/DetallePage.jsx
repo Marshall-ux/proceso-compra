@@ -91,7 +91,9 @@ export default function DetallePage() {
             Solicitud #{solicitud.id}{' '}
             {completa
               ? <span className="badge badge--success">Autorizada</span>
-              : <span className="badge badge--warning">Pendiente · {solicitud.autorizaciones.length}/2 firmas</span>}
+              : <span className="badge badge--warning">
+                  {solicitud.requiere_segunda_firma ? 'Pendiente · falta 2ª firma' : 'Pendiente'}
+                </span>}
           </h1>
           <div className="toolbar__info">
             {solicitud.proveedor_nombre} · {solicitud.marca} · $ {fmtMoney(solicitud.monto_total)}

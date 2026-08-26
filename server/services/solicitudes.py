@@ -206,9 +206,12 @@ def obtener(solicitud_id):
                 'FROM autorizaciones a JOIN autorizados au ON au.id = a.autorizado_id '
                 'WHERE a.solicitud_id = ? ORDER BY a.fecha', (solicitud_id,))
         ]
-        solicitud['autorizaciones_requeridas'] = AUTORIZACIONES_REQUERIDAS
-        solicitud['autorizaciones_faltantes'] = max(
-            0, AUTORIZACIONES_REQUERIDAS - len(solicitud['autorizaciones']))
+        # Regla nueva: alcanza 1 firma dentro del tope; si la supera, hace falta una 2a.
+        firmas = solicitud['autorizaciones']
+        autorizada = solicitud['estado'] == 'autorizada'
+        # requiere 2a firma = hay una sola firma y quedó pendiente porque excedió el tope.
+        solicitud['requiere_segunda_firma'] = (not autorizada and len(firmas) == 1)
+        solicitud['autorizaciones_faltantes'] = 0 if autorizada else 1
         return solicitud
     finally:
         conn.close()

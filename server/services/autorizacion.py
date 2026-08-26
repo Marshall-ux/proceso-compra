@@ -85,7 +85,7 @@ def firmar(conn, solicitud, autorizado):
         'SELECT 1 FROM autorizaciones WHERE solicitud_id = ? AND autorizado_id = ?',
         (solicitud['id'], autorizado['id'])).fetchone()
     if ya:
-        return False, f'{autorizado["nombre"]} ya autorizó esta solicitud (hacen falta dos personas distintas)', False
+        return False, f'{autorizado["nombre"]} ya autorizó esta solicitud', False
 
     tope = autorizado['monto_autorizado']
     excedio = tope is not None and float(solicitud['monto_total'] or 0) > tope
@@ -96,7 +96,9 @@ def firmar(conn, solicitud, autorizado):
 
     firmas = conn.execute('SELECT COUNT(*) AS n FROM autorizaciones WHERE solicitud_id = ?',
                           (solicitud['id'],)).fetchone()['n']
-    if firmas >= AUTORIZACIONES_REQUERIDAS:
+    # Regla: alcanza UNA firma si el monto no supera el tope de quien firmó (o es sin
+    # límite). Si lo supera, queda pendiente hasta una segunda firma de otra persona.
+    if firmas >= AUTORIZACIONES_REQUERIDAS or (firmas == 1 and not excedio):
         conn.execute('UPDATE solicitudes SET estado = "autorizada", '
                      'updated_at = datetime("now", "localtime") WHERE id = ?', (solicitud['id'],))
 

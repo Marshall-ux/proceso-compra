@@ -16,6 +16,7 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
   const disponibles = solicitud.autorizados_disponibles || []
   const firmas = solicitud.autorizaciones || []
   const completa = solicitud.estado === 'autorizada'
+  const requiere2 = solicitud.requiere_segunda_firma
   const primerUso = elegido && !elegido.tiene_pin
 
   const limpiar = () => {
@@ -72,52 +73,55 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
       <div className="card__title">
         ✍️ Autorización
         {completa
-          ? <span className="badge badge--success">Completa</span>
-          : <span className="badge badge--warning">Falta{solicitud.autorizaciones_faltantes > 1 ? 'n' : ''} {solicitud.autorizaciones_faltantes} firma{solicitud.autorizaciones_faltantes > 1 ? 's' : ''}</span>}
+          ? <span className="badge badge--success">Autorizada</span>
+          : <span className="badge badge--warning">Pendiente</span>}
       </div>
       <div className="card__hint">
-        Se necesitan <strong>dos personas distintas</strong> para completar el proceso.
+        {completa
+          ? 'Autorizada. El PDF ya está disponible.'
+          : requiere2
+            ? <>El monto <strong>supera el tope</strong> de {firmas[0]?.nombre}: necesita una <strong>segunda firma</strong> de otra persona.</>
+            : <>Con una firma <strong>dentro del tope</strong> del autorizante queda autorizada. Si el monto supera su tope, hará falta una segunda.</>}
       </div>
 
       <div className="firmas">
-        {[0, 1].map((i) => {
-          const f = firmas[i]
-          return (
-            <div key={i} className={`firma ${f ? 'firma--completa' : ''}`}>
-              <div className="firma__slot">Autorizante {i + 1}</div>
-              {f ? (
-                <>
-                  <div className="firma__nombre">{f.nombre}</div>
-                  <div className="firma__cargo">{f.cargo}</div>
-                  <div className="firma__fecha">{fmtFechaHora(f.fecha)}</div>
-                  {!!f.excedio_tope && (
-                    <div className="badge badge--warning" style={{ marginTop: '0.4rem' }}>
-                      Excedió su tope de $ {fmtMoney(f.monto_tope)}
-                    </div>
-                  )}
-                  {!completa && (
-                    <button
-                      className="btn btn--danger btn--sm" style={{ marginTop: '0.5rem' }}
-                      onClick={() => quitar(f)}
-                      title="Deshacer esta firma (por ejemplo, si autorizó por error)"
-                    >
-                      ✕ Quitar firma
-                    </button>
-                  )}
-                </>
-              ) : (
-                <div className="firma__vacia">Pendiente</div>
-              )}
+        {(completa ? firmas : [...firmas, null]).map((f, i) => (
+          <div key={i} className={`firma ${f ? 'firma--completa' : ''}`}>
+            <div className="firma__slot">
+              {f ? `Firma ${i + 1}` : (firmas.length ? 'Segunda firma' : 'Autorización')}
             </div>
-          )
-        })}
+            {f ? (
+              <>
+                <div className="firma__nombre">{f.nombre}</div>
+                <div className="firma__cargo">{f.cargo}</div>
+                <div className="firma__fecha">{fmtFechaHora(f.fecha)}</div>
+                {!!f.excedio_tope && (
+                  <div className="badge badge--warning" style={{ marginTop: '0.4rem' }}>
+                    Excedió su tope de $ {fmtMoney(f.monto_tope)}
+                  </div>
+                )}
+                {!completa && (
+                  <button
+                    className="btn btn--danger btn--sm" style={{ marginTop: '0.5rem' }}
+                    onClick={() => quitar(f)}
+                    title="Deshacer esta firma (por ejemplo, si autorizó por error)"
+                  >
+                    ✕ Quitar firma
+                  </button>
+                )}
+              </>
+            ) : (
+              <div className="firma__vacia">{requiere2 ? 'Falta la segunda firma' : 'Pendiente de firma'}</div>
+            )}
+          </div>
+        ))}
       </div>
 
       {aviso && <div className="alert alert--warning">{aviso}</div>}
 
       {completa ? (
         <div className="alert alert--ok">
-          Proceso completo: la autorización quedó firmada por {firmas.length} personas y el PDF ya está disponible.
+          Autorizada: firmada por {firmas.length} {firmas.length === 1 ? 'persona' : 'personas'} y el PDF ya está disponible.
         </div>
       ) : (
         <>

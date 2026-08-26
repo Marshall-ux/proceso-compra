@@ -187,8 +187,8 @@ export default function HomePage() {
                     </td>
                     <td className="num">$ {fmtMoney(s.monto_total)}</td>
                     <td>
-                      <span className={`badge ${s.firmas >= 2 ? 'badge--success' : 'badge--muted'}`}>
-                        {s.firmas}/2
+                      <span className={`badge ${s.estado === 'autorizada' ? 'badge--success' : 'badge--muted'}`}>
+                        {s.firmas} {s.firmas === 1 ? 'firma' : 'firmas'}
                       </span>
                     </td>
                     <td>
