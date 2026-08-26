@@ -83,6 +83,18 @@ def _resumen(solicitud):
     else:
         lineas.append('  (sin autorizaciones todavía)')
 
+    if solicitud.get('pagos'):
+        res = solicitud.get('pagos_resumen') or {}
+        lineas += ['', 'PAGOS IMPUTADOS', '-' * 60,
+                   f'  Presupuesto: $ {fmt_money(res.get("presupuesto"))}  |  '
+                   f'Imputado: $ {fmt_money(res.get("imputado"))}'
+                   + ('' if res.get('abierta') else f'  |  Saldo: $ {fmt_money(res.get("saldo"))}')]
+        for p in solicitud['pagos']:
+            estado = 'CONFORME' if p.get('estado') == 'conforme' else 'pendiente'
+            firmas = ', '.join(f.get('nombre', '') for f in p.get('firmas', [])) or 'sin firmas'
+            lineas.append(f'  [{estado}] {p.get("descripcion", "")} - $ {fmt_money(p.get("monto"))}'
+                          f' - {p.get("fecha") or "-"} - conformidad: {firmas}')
+
     lineas += ['', 'ARCHIVOS ADJUNTOS', '-' * 60]
     for f in solicitud.get('facturas', []):
         lineas.append(f'  facturas/{f.get("nombre", "")}')
@@ -113,6 +125,13 @@ def _escribir_solicitud(zf, solicitud, prefijo=''):
     for i, f in enumerate(solicitud.get('facturas', []), start=1):
         nombre = f.get('nombre') or f'factura-{i}.pdf'
         _agregar_adjunto(zf, f.get('archivo'), f'{prefijo}facturas/{i:02d}-{nombre}')
+
+    # Facturas de los pagos imputados, cada pago en su subcarpeta.
+    for pi, pago in enumerate(solicitud.get('pagos', []), start=1):
+        slug = _slug(pago.get('descripcion') or f'pago-{pi}', 30)
+        for fi, f in enumerate(pago.get('facturas', []), start=1):
+            nombre = f.get('nombre') or f'factura-{fi}.pdf'
+            _agregar_adjunto(zf, f.get('archivo'), f'{prefijo}pagos/{pi:02d}-{slug}/{fi:02d}-{nombre}')
 
     if solicitud.get('legajo_archivo'):
         _agregar_adjunto(zf, solicitud['legajo_archivo'],
