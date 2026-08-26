@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import FormularioSolicitud from '../components/FormularioSolicitud.jsx'
 import PanelAutorizacion from '../components/PanelAutorizacion.jsx'
+import SeccionPagos from '../components/SeccionPagos.jsx'
 import { fmtMoney } from '../constants.js'
 import {
   actualizarSolicitud, eliminarSolicitud, obtenerSolicitud,
@@ -137,6 +138,8 @@ export default function DetallePage() {
       </div>
 
       <PanelAutorizacion solicitud={solicitud} onActualizar={setSolicitud} />
+
+      {completa && <SeccionPagos solicitud={solicitud} onActualizar={setSolicitud} />}
 
       <div className="card">
         <div className="toolbar" style={{ marginBottom: editando ? '1.2rem' : 0 }}>

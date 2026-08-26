@@ -391,6 +391,32 @@ table.data { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
   user-select: all;
 }
 
+/* ------------------------------- pagos ---------------------------------- */
+.pagos-resumen {
+  display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center;
+  padding: 0.9rem 1.1rem; margin-bottom: 1rem;
+  background: var(--bg-alt); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.pagos-resumen > div { display: flex; flex-direction: column; }
+.pagos-resumen strong { font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.pagos-resumen__lab { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 700; }
+
+.pagos-lista { display: flex; flex-direction: column; gap: 0.7rem; }
+.pago { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.9rem 1rem; background: var(--surface); }
+.pago--conforme { border-color: var(--green); background: var(--green-softer); }
+.pago__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.pago__fecha { color: var(--text-muted); font-size: 0.85rem; }
+.pago__meta { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.25rem; display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+.pago__monto { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pago__monto > div { margin-top: 0.3rem; font-weight: 400; }
+.pago__firmas { margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.82rem; color: var(--green-dark); }
+.pago__firma em { color: var(--warning); font-style: normal; }
+.pago__acciones { margin-top: 0.7rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.pago__firmar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; width: 100%; }
+.pago__firmar select { padding: 0.5rem 0.6rem; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; flex: 1; min-width: 220px; }
+.pago__firmar .pin-input { width: 110px; }
+.pago-nuevo { margin-top: 1rem; padding: 1.1rem; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); background: var(--bg-alt); }
+
 /* ------------------------------- modal ---------------------------------- */
 .modal-fondo {
   position: fixed; inset: 0; z-index: 60;

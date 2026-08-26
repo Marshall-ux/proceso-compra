@@ -136,6 +136,24 @@ export const marcarAutopack = (id, ok) =>
     body: JSON.stringify({ ok }),
   })
 
+// --- pagos imputados a una AGC ---
+export const crearPago = (id, payload) =>
+  pedir(`/solicitudes/${id}/pagos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+export const firmarPago = (id, pagoId, payload) =>
+  pedir(`/solicitudes/${id}/pagos/${pagoId}/firmar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+export const eliminarPago = (id, pagoId) =>
+  pedir(`/solicitudes/${id}/pagos/${pagoId}`, { method: 'DELETE' })
+
 export const urlPdf = (id) => `${BASE}/solicitudes/${id}/pdf`
 export const urlPdfCompleto = (id) => `${BASE}/solicitudes/${id}/pdf-completo`
 export const urlZip = (id) => `${BASE}/solicitudes/${id}/zip`

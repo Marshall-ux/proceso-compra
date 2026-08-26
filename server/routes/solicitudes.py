@@ -4,6 +4,7 @@ from datetime import datetime
 from flask import Blueprint, jsonify, request, send_file
 
 from models.database import get_db
+from services import pagos
 from services import solicitudes as svc
 from services.admin import verificar_admin
 from services.autorizacion import ErrorAutorizante, firmar, verificar_autorizante
@@ -14,6 +15,13 @@ bp = Blueprint('solicitudes', __name__)
 
 GENERADOS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'generated')
 UPLOADS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
+
+
+def _con_disponibles(solicitud):
+    """Agrega la lista de autorizados habilitados (para los selectores de firma)."""
+    if solicitud:
+        solicitud['autorizados_disponibles'] = svc.autorizados_para(solicitud)
+    return solicitud
 
 
 @bp.route('/solicitudes', methods=['GET'])
@@ -182,6 +190,64 @@ def marcar_autopack(solicitud_id):
     return jsonify({'ok': True, 'autopack_ok': valor})
 
 
+# ------------------------------- pagos imputados ----------------------------
+@bp.route('/solicitudes/<int:solicitud_id>/pagos', methods=['POST'])
+def crear_pago(solicitud_id):
+    """Imputa un pago (factura de anticipo/avance/servicio) a una AGC ya autorizada."""
+    data = request.get_json(silent=True) or {}
+    pago_id, error = pagos.crear_pago(solicitud_id, data, data.get('facturas', []))
+    if error:
+        codigo = 404 if 'no existe' in error else 400
+        return jsonify({'error': error}), codigo
+    return jsonify(_con_disponibles(svc.obtener(solicitud_id))), 201
+
+
+@bp.route('/solicitudes/<int:solicitud_id>/pagos/<int:pago_id>/firmar', methods=['POST'])
+def firmar_pago(solicitud_id, pago_id):
+    """Firma la conformidad de un pago (que el servicio/avance se dio). Misma regla que
+    la AGC: 1 firma dentro del tope, 2 si lo supera."""
+    data = request.get_json(silent=True) or {}
+    solicitud = svc.obtener(solicitud_id)
+    if not solicitud:
+        return jsonify({'error': 'La AGC no existe'}), 404
+
+    conn = get_db()
+    try:
+        pago = pagos.obtener_pago(conn, solicitud_id, pago_id)
+        if not pago:
+            return jsonify({'error': 'El pago no existe'}), 404
+        try:
+            autorizado = verificar_autorizante(conn, data.get('autorizado_id'), str(data.get('pin') or ''))
+        except ErrorAutorizante as e:
+            return jsonify({'error': e.mensaje, **e.extra}), e.codigo
+
+        ok, motivo, excedio = pagos.firmar_pago(conn, solicitud, pago, autorizado)
+        if not ok:
+            conn.commit()
+            return jsonify({'error': motivo}), 400
+        conn.commit()
+        nombre, tope = autorizado['nombre'], autorizado['monto_autorizado']
+    finally:
+        conn.close()
+
+    resultado = _con_disponibles(svc.obtener(solicitud_id))
+    resultado['aviso_tope'] = (
+        f'{nombre} firmó un pago que supera su tope de $ {fmt_money(tope)}: '
+        f'hace falta una segunda firma.' if excedio else ''
+    )
+    return jsonify(resultado)
+
+
+@bp.route('/solicitudes/<int:solicitud_id>/pagos/<int:pago_id>', methods=['DELETE'])
+def eliminar_pago(solicitud_id, pago_id):
+    """Elimina un pago mientras no esté conforme."""
+    ok, error = pagos.eliminar_pago(solicitud_id, pago_id)
+    if not ok:
+        codigo = 404 if 'no existe' in error else 400
+        return jsonify({'error': error}), codigo
+    return jsonify(_con_disponibles(svc.obtener(solicitud_id)))
+
+
 @bp.route('/solicitudes/<int:solicitud_id>/autorizaciones/<int:autorizacion_id>', methods=['DELETE'])
 def quitar_autorizacion(solicitud_id, autorizacion_id):
     """Deshace una firma (solo mientras la solicitud siga pendiente)."""
@@ -279,11 +345,13 @@ def _adjunto(archivo, nombre_descarga, mimetype):
 
 @bp.route('/solicitudes/<int:solicitud_id>/facturas/<int:factura_id>', methods=['GET'])
 def factura(solicitud_id, factura_id):
-    """Devuelve el PDF original de una de las facturas de la solicitud."""
-    solicitud = svc.obtener(solicitud_id)
-    if not solicitud:
-        return jsonify({'error': 'La solicitud no existe'}), 404
-    fac = next((f for f in solicitud['facturas'] if f['id'] == factura_id), None)
+    """Devuelve el PDF de una factura de la solicitud (de la AGC o de un pago)."""
+    conn = get_db()
+    try:
+        fac = conn.execute('SELECT nombre, archivo FROM facturas WHERE id = ? AND solicitud_id = ?',
+                           (factura_id, solicitud_id)).fetchone()
+    finally:
+        conn.close()
     if not fac:
         return jsonify({'error': 'La factura no existe'}), 404
     return _adjunto(fac['archivo'], fac['nombre'] or 'factura.pdf', 'application/pdf')

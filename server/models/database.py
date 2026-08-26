@@ -83,7 +83,34 @@ CREATE TABLE IF NOT EXISTS facturas (
     nombre        TEXT NOT NULL DEFAULT '',   -- nombre original del archivo
     archivo       TEXT NOT NULL DEFAULT '',   -- nombre guardado en uploads/
     numero        TEXT NOT NULL DEFAULT '',   -- nro de comprobante leido del PDF
-    orden         INTEGER NOT NULL DEFAULT 0
+    orden         INTEGER NOT NULL DEFAULT 0,
+    pago_id       INTEGER REFERENCES pagos(id) ON DELETE CASCADE  -- NULL = factura de la AGC
+);
+
+-- Pagos imputados a una AGC ya autorizada (anticipos/avances de una obra, viajes de
+-- un flete, etc.). La AGC controla el presupuesto; cada pago se firma como conformidad
+-- de que el servicio/avance se dio. No re-autorizan la AGC.
+CREATE TABLE IF NOT EXISTS pagos (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    solicitud_id  INTEGER NOT NULL REFERENCES solicitudes(id) ON DELETE CASCADE,
+    descripcion   TEXT NOT NULL DEFAULT '',
+    monto         REAL NOT NULL DEFAULT 0,
+    fecha         TEXT NOT NULL DEFAULT '',    -- fecha del pago/factura (dd/mm/aaaa)
+    cargado_por   TEXT NOT NULL DEFAULT '',
+    estado        TEXT NOT NULL DEFAULT 'pendiente',  -- pendiente | conforme
+    created_at    TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+-- Firmas de conformidad de cada pago (misma regla que la AGC: 1 firma dentro del tope,
+-- 2 si lo supera).
+CREATE TABLE IF NOT EXISTS pago_firmas (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    pago_id       INTEGER NOT NULL REFERENCES pagos(id) ON DELETE CASCADE,
+    autorizado_id INTEGER NOT NULL REFERENCES autorizados(id),
+    excedio_tope  INTEGER NOT NULL DEFAULT 0,
+    monto_tope    REAL,
+    fecha         TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    UNIQUE (pago_id, autorizado_id)
 );
 
 CREATE TABLE IF NOT EXISTS items (
@@ -173,10 +200,15 @@ _COLUMNAS_AUTORIZADOS = {
     'bloqueado_hasta': 'TEXT',
 }
 
+_COLUMNAS_FACTURAS = {
+    'pago_id': 'INTEGER',   # NULL = factura de la AGC; con valor = factura de un pago
+}
+
 
 def _migrar(conn):
     """Agrega a una base preexistente las columnas nuevas que falten."""
-    for tabla, columnas in (('solicitudes', _COLUMNAS_V2), ('autorizados', _COLUMNAS_AUTORIZADOS)):
+    for tabla, columnas in (('solicitudes', _COLUMNAS_V2), ('autorizados', _COLUMNAS_AUTORIZADOS),
+                            ('facturas', _COLUMNAS_FACTURAS)):
         existentes = {r['name'] for r in conn.execute(f'PRAGMA table_info({tabla})')}
         for columna, definicion in columnas.items():
             if columna not in existentes:

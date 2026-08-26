@@ -198,7 +198,8 @@ def obtener(solicitud_id):
         ]
         solicitud['facturas'] = [
             _fila_a_dict(r) for r in
-            conn.execute('SELECT * FROM facturas WHERE solicitud_id = ? ORDER BY orden', (solicitud_id,))
+            conn.execute('SELECT * FROM facturas WHERE solicitud_id = ? AND pago_id IS NULL '
+                         'ORDER BY orden', (solicitud_id,))
         ]
         solicitud['autorizaciones'] = [
             _fila_a_dict(r) for r in conn.execute(
@@ -212,6 +213,11 @@ def obtener(solicitud_id):
         # requiere 2a firma = hay una sola firma y quedó pendiente porque excedió el tope.
         solicitud['requiere_segunda_firma'] = (not autorizada and len(firmas) == 1)
         solicitud['autorizaciones_faltantes'] = 0 if autorizada else 1
+
+        # Pagos imputados a esta AGC (import diferido para evitar ciclo de imports).
+        from services import pagos as pagos_svc
+        solicitud['pagos'] = pagos_svc.listar_pagos(conn, solicitud_id)
+        solicitud['pagos_resumen'] = pagos_svc.resumen(solicitud)
         return solicitud
     finally:
         conn.close()
