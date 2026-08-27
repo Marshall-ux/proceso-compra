@@ -30,6 +30,16 @@ def listar():
                               busqueda=request.args.get('q')))
 
 
+@bp.route('/solicitudes/para-firmar', methods=['GET'])
+def para_firmar():
+    """Pendientes que un autorizante puede firmar (para el acceso rápido del firmante)."""
+    try:
+        autorizado_id = int(request.args.get('autorizado_id'))
+    except (TypeError, ValueError):
+        return jsonify([])
+    return jsonify(svc.para_firmar(autorizado_id))
+
+
 @bp.route('/solicitudes', methods=['POST'])
 def crear():
     data = request.get_json(silent=True) or {}

@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import PanelLote from '../components/PanelLote.jsx'
 import robot from '../assets/robot-id.png'
-import { fmtMoney } from '../constants.js'
-import { listarSolicitudes, marcarAutopack, urlZipLote } from '../services/api.js'
+import { LISTAS, fmtMoney } from '../constants.js'
+import {
+  listarAutorizados, listarSolicitudes, marcarAutopack, paraFirmar, urlZipLote,
+} from '../services/api.js'
 
 export default function HomePage() {
   const navigate = useNavigate()
@@ -13,6 +15,30 @@ export default function HomePage() {
   const [cargando, setCargando] = useState(true)
   const [seleccion, setSeleccion] = useState([])
   const [mensaje, setMensaje] = useState(null)
+
+  // Acceso rápido del firmante (sin login): elige su nombre, el navegador lo recuerda.
+  const [autorizados, setAutorizados] = useState([])
+  const [firmante, setFirmante] = useState(() => localStorage.getItem('firmante') || '')
+  const [misFirmas, setMisFirmas] = useState([])
+
+  useEffect(() => { listarAutorizados().then(setAutorizados).catch(() => {}) }, [])
+
+  const cargarMisFirmas = useCallback(async (id) => {
+    if (!id) { setMisFirmas([]); return }
+    try {
+      setMisFirmas(await paraFirmar(id))
+    } catch {
+      setMisFirmas([])
+    }
+  }, [])
+
+  useEffect(() => { cargarMisFirmas(firmante) }, [firmante, cargarMisFirmas, solicitudes])
+
+  const elegirFirmante = (id) => {
+    setFirmante(id)
+    if (id) localStorage.setItem('firmante', id)
+    else localStorage.removeItem('firmante')
+  }
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -61,6 +87,56 @@ export default function HomePage() {
           </p>
         </div>
         <img src={robot} alt="" className="hero__robot" />
+      </div>
+
+      {/* Acceso rápido del firmante */}
+      <div className="card firmante-card">
+        <div className="firmante-card__top">
+          <div className="card__title" style={{ marginBottom: 0 }}>✍️ Para firmar</div>
+          <label className="firmante-select">
+            Soy:
+            <select value={firmante} onChange={(e) => elegirFirmante(e.target.value)}>
+              <option value="">Elegí tu nombre…</option>
+              {autorizados.map((a) => (
+                <option key={a.id} value={a.id}>{a.nombre} · {LISTAS[a.lista] || a.lista}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {firmante && (
+          misFirmas.length === 0 ? (
+            <div className="card__hint" style={{ marginBottom: 0 }}>
+              No tenés solicitudes pendientes para firmar. 🎉
+            </div>
+          ) : (
+            <>
+              <div className="card__hint">
+                Tenés <strong>{misFirmas.length}</strong> para firmar:
+              </div>
+              <div className="para-firmar-lista">
+                {misFirmas.map((s) => (
+                  <button
+                    key={s.id} className="para-firmar-item"
+                    onClick={() => navigate(`/solicitudes/${s.id}`)}
+                  >
+                    <span className="para-firmar-item__id">#{s.id}</span>
+                    <span className="para-firmar-item__prov">
+                      {s.proveedor_nombre}
+                      <span className="para-firmar-item__marca">
+                        {' · '}{(s.marcas || []).length > 1 ? 'varias marcas' : (s.marca === 'OTRO' ? s.marca_otro : s.marca)}
+                      </span>
+                    </span>
+                    <span className="para-firmar-item__monto">$ {fmtMoney(s.monto_total)}</span>
+                    {s.requiere_segunda_firma && (
+                      <span className="badge badge--warning">falta 2ª firma</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </>
+          )
+        )}
       </div>
 
       <div className="card">

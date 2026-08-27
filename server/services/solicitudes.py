@@ -245,6 +245,38 @@ def listar(estado=None, busqueda=None):
         conn.close()
 
 
+def para_firmar(autorizado_id):
+    """Solicitudes pendientes que este autorizante puede firmar: habilitado para la
+    marca y que todavía no firmó. Ordenadas por las que necesitan 2a firma primero."""
+    conn = get_db()
+    try:
+        a = conn.execute('SELECT lista FROM autorizados WHERE id = ? AND activo = 1',
+                         (autorizado_id,)).fetchone()
+        if not a:
+            return []
+        salida = []
+        for s in conn.execute("SELECT * FROM solicitudes WHERE estado = 'pendiente' ORDER BY id DESC"):
+            if a['lista'] not in listas_habilitadas(marcas_de(s)):
+                continue
+            ya = conn.execute(
+                'SELECT 1 FROM autorizaciones WHERE solicitud_id = ? AND autorizado_id = ?',
+                (s['id'], autorizado_id)).fetchone()
+            if ya:
+                continue
+            firmas = conn.execute('SELECT COUNT(*) AS n FROM autorizaciones WHERE solicitud_id = ?',
+                                  (s['id'],)).fetchone()['n']
+            d = _fila_a_dict(s)
+            d['marcas'] = marcas_de(s)
+            d['firmas'] = firmas
+            d['requiere_segunda_firma'] = (firmas == 1)
+            salida.append(d)
+        # las que ya tienen 1 firma (esperando la 2a) primero.
+        salida.sort(key=lambda x: (not x['requiere_segunda_firma'], -x['id']))
+        return salida
+    finally:
+        conn.close()
+
+
 def eliminar(solicitud_id, motivo, eliminado_por='', es_admin=False):
     """Borra una solicitud dejando acta en 'eliminaciones' (qué, por qué y quién).
     El motivo es obligatorio. Una solicitud ya autorizada solo la puede eliminar

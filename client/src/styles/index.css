@@ -391,6 +391,31 @@ table.data { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
   user-select: all;
 }
 
+/* --------------------------- para firmar -------------------------------- */
+.firmante-card { border-color: var(--green); background: var(--green-softer); }
+.firmante-card__top {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap; margin-bottom: 0.9rem;
+}
+.firmante-select { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.9rem; color: var(--text-soft); }
+.firmante-select select {
+  padding: 0.5rem 0.7rem; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong); font-family: inherit; font-size: 0.95rem; background: #fff;
+  min-width: 240px;
+}
+.para-firmar-lista { display: flex; flex-direction: column; gap: 0.45rem; }
+.para-firmar-item {
+  display: flex; align-items: center; gap: 0.8rem; width: 100%; text-align: left;
+  padding: 0.6rem 0.85rem; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); cursor: pointer; font-family: inherit; font-size: 0.92rem;
+  transition: all 0.15s ease;
+}
+.para-firmar-item:hover { border-color: var(--green); box-shadow: var(--shadow-sm); }
+.para-firmar-item__id { font-weight: 800; color: var(--green-dark); }
+.para-firmar-item__prov { flex: 1; font-weight: 600; }
+.para-firmar-item__marca { color: var(--text-muted); font-weight: 400; }
+.para-firmar-item__monto { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+
 /* ------------------------------- pagos ---------------------------------- */
 .pagos-resumen {
   display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center;

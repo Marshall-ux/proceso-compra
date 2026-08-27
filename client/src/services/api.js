@@ -72,6 +72,10 @@ export const listarSolicitudes = (params = {}) => {
 
 export const obtenerSolicitud = (id) => pedir(`/solicitudes/${id}`)
 
+// Pendientes que un autorizante puede firmar (acceso rápido del firmante).
+export const paraFirmar = (autorizadoId) =>
+  pedir(`/solicitudes/para-firmar?autorizado_id=${autorizadoId}`)
+
 export const crearSolicitud = (datos) =>
   pedir('/solicitudes', {
     method: 'POST',
