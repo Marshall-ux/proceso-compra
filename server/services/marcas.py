@@ -24,11 +24,11 @@ CONCEPTOS = {
 # marca -> listas de autorizados especificas (multimarca se suma aparte).
 _LISTAS_POR_MARCA = {
     'NISSAN': ['nissan'],
-    'FCA': ['jeep'],           # la planilla "JEEP" es la de Chrysler/FCA
+    'FCA': ['jeep', 'jeep_byd'],  # la planilla "JEEP" es la de Chrysler/FCA
     'KIA': ['kia'],
     'SUZUKI': ['kia'],         # la planilla KIA cubre explicitamente Kia / Suzuki
     'HONDA': ['honda'],
-    'BYD': ['byd'],
+    'BYD': ['byd', 'jeep_byd'],  # jeep_byd: autorizan Jeep/Chrysler y tambien BYD
 }
 
 

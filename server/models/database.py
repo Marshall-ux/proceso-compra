@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS autorizados (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre            TEXT NOT NULL UNIQUE,
     cargo             TEXT NOT NULL,
-    lista             TEXT NOT NULL,           -- nissan | jeep | kia | multimarca
+    lista             TEXT NOT NULL,           -- nissan | jeep | jeep_byd | kia | honda | byd | multimarca
     monto_autorizado  REAL,                    -- NULL = SIN LIMITE
     conceptos         TEXT NOT NULL DEFAULT '',
     pin_hash          TEXT,                    -- NULL = todavia no dio de alta su PIN
@@ -215,9 +215,20 @@ def _migrar(conn):
                 conn.execute(f'ALTER TABLE {tabla} ADD COLUMN {columna} {definicion}')
 
 
+# Correcciones de nombre: el seed matchea por nombre, así que sin esto se crearía una
+# fila nueva (sin PIN) y la vieja quedaría inactiva. Se renombra la fila existente.
+_RENOMBRES = {
+    'Lisandro Caseres': 'Lisandro Cáceres',
+}
+
+
 def _seed_autorizados(conn):
     """Inserta los autorizados que falten y actualiza cargo/monto/conceptos de los
     existentes, sin tocar el PIN ya dado de alta."""
+    for viejo, nuevo in _RENOMBRES.items():
+        if not conn.execute('SELECT 1 FROM autorizados WHERE nombre = ?', (nuevo,)).fetchone():
+            conn.execute('UPDATE autorizados SET nombre = ? WHERE nombre = ?', (nuevo, viejo))
+
     for a in AUTORIZADOS:
         row = conn.execute('SELECT id FROM autorizados WHERE nombre = ?', (a['nombre'],)).fetchone()
         if row:

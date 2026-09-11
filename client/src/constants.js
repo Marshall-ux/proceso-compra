@@ -59,6 +59,7 @@ export const MAX_ITEMS = 6
 export const LISTAS = {
   nissan: 'Nissan',
   jeep: 'Jeep / Chrysler',
+  jeep_byd: 'Jeep / Chrysler + BYD',
   kia: 'Kia',
   honda: 'Honda',
   byd: 'BYD',

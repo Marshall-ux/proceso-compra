@@ -77,9 +77,9 @@ AUTORIZADOS = [
         'conceptos': 'Todo lo relativo a servicios y repuestos de taller Chrysler.',
     },
     {
-        'nombre': 'Lisandro Caseres',
+        'nombre': 'Lisandro Cáceres',
         'cargo': 'Jefe de PostVenta General',
-        'lista': 'jeep',
+        'lista': 'jeep_byd',  # pedido: tambien autoriza BYD
         'monto_autorizado': 3500000.00,
         'conceptos': 'Viaticos, capacitaciones y todo lo relativo a servicios de taller Chrysler.',
     },
