@@ -73,6 +73,10 @@ CREATE TABLE IF NOT EXISTS solicitudes (
     legajo_archivo      TEXT NOT NULL DEFAULT '',    -- PDF del legajo impositivo
     empresas            TEXT NOT NULL DEFAULT '',    -- JSON: multi-selección de empresas
     marcas              TEXT NOT NULL DEFAULT '',    -- JSON: multi-selección de marcas
+    -- Avisos por mail ya enviados. Son la marca de idempotencia: el aviso sale en
+    -- la transición (alta / queda autorizada), no en cada guardado.
+    notificado_at          TEXT,                     -- aviso a los autorizantes
+    cajeras_notificado_at  TEXT,                     -- aviso a las cajeras
     created_at          TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     updated_at          TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
@@ -179,6 +183,11 @@ _COLUMNAS_V2 = {
     # se mantienen con el primer valor, para compatibilidad y para búsqueda/listado.
     'empresas': "TEXT NOT NULL DEFAULT ''",
     'marcas': "TEXT NOT NULL DEFAULT ''",
+    # Avisos por mail (ver services/avisos.py). Sin DEFAULT: NULL = todavía no se avisó.
+    # Las solicitudes que ya existían quedan en NULL, así que la primera vez que pasen
+    # a autorizada las cajeras se enteran; el alta de esas viejas ya pasó hace rato.
+    'notificado_at': 'TEXT',
+    'cajeras_notificado_at': 'TEXT',
 }
 
 

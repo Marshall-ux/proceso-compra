@@ -1,9 +1,11 @@
+import logging
 import os
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request, send_file
 
 from models.database import get_db
+from services import avisos
 from services import pagos
 from services import solicitudes as svc
 from services.admin import verificar_admin
@@ -11,7 +13,18 @@ from services.autorizacion import ErrorAutorizante, firmar, verificar_autorizant
 from services.paquete import armar_zip, armar_zip_lote, nombre_zip
 from services.pdf_fill import fmt_money, generar_pdf, generar_pdf_con_facturas
 
+log = logging.getLogger(__name__)
+
 bp = Blueprint('solicitudes', __name__)
+
+
+def _avisar(fn, solicitud):
+    """Dispara un aviso por mail sin que su fallo voltee la operacion: el mail es
+    un extra, la solicitud ya esta guardada. Si no sale, queda en el log."""
+    try:
+        fn(solicitud, request)
+    except Exception:
+        log.exception('Fallo el aviso por mail de la solicitud #%s', solicitud.get('id'))
 
 GENERADOS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'generated')
 UPLOADS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
@@ -47,7 +60,10 @@ def crear():
     if errores:
         return jsonify({'error': 'Faltan datos obligatorios', 'errores': errores}), 400
     solicitud_id = svc.crear(data, data.get('items', []), data.get('facturas', []))
-    return jsonify(svc.obtener(solicitud_id)), 201
+    # El gasto nace pendiente: recien ACA, ya persistido, se avisa a los autorizantes.
+    solicitud = svc.obtener(solicitud_id)
+    _avisar(avisos.notificar_gasto_a_autorizar, solicitud)
+    return jsonify(solicitud), 201
 
 
 @bp.route('/solicitudes/<int:solicitud_id>', methods=['GET'])
@@ -126,6 +142,8 @@ def autorizar(solicitud_id):
         conn.close()
 
     resultado = svc.obtener(solicitud_id)
+    # Si esta firma completo la autorizacion, administracion ya puede pagarla.
+    _avisar(avisos.notificar_autorizada, resultado)
     resultado['autorizados_disponibles'] = svc.autorizados_para(resultado)
     resultado['aviso_tope'] = (
         f'{nombre} autorizó un monto que supera su tope de '
@@ -170,6 +188,9 @@ def autorizar_lote():
         nombre = autorizado['nombre']
     finally:
         conn.close()
+
+    for sid in firmadas:
+        _avisar(avisos.notificar_autorizada, svc.obtener(sid))
 
     return jsonify({
         'ok': True,

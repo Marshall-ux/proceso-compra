@@ -14,6 +14,33 @@ services:
       # Clave de administración (blanquear/generar códigos/desbloquear PINs).
       # El valor real va en el archivo .env (no se sube a git). Ver .env.example.
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-cambiar-esta-clave}
+      # Avisos por mail (ver README). Van SIN "=": así, si la variable no está en
+      # el .env, manda el default del código y no una cadena vacía que lo pise.
+      - APP_NOMBRE
+      - APP_COLOR
+      - SMTP_HOST
+      - SMTP_PORT
+      - SMTP_USER
+      - SMTP_PASSWORD
+      - MAIL_FROM_NOMBRE
+      - MAIL_REPLY_TO
+      # Dominio con el que se arman los links de los mails. Sin esto el link sale
+      # apuntando a http://backend:5000, que no existe fuera de la red de Docker.
+      - PUBLIC_BASE_URL
+      # Destinatarios: autorizantes por planilla y cajeras por razón social.
+      - AVISO_NISSAN
+      - AVISO_JEEP
+      - AVISO_JEEP_BYD
+      - AVISO_KIA
+      - AVISO_HONDA
+      - AVISO_BYD
+      - AVISO_MULTIMARCA
+      - AUTORIZA_NOTIF_EMAIL
+      - CAJA_ALCO_ROSARIO
+      - CAJA_NEOSTAR
+      - CAJA_XINOXIA
+      - CAJA_DASEOS
+      - CAJA_HIKARI
     networks:
       - default
   frontend:
