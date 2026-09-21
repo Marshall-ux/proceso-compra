@@ -2,7 +2,8 @@
 
 Dos momentos, dos destinatarios:
 
-1. **Alta del gasto** -> a los autorizantes de esa marca: hay una AGC esperando
+1. **Alta del gasto** -> a los autorizantes que eligio quien cargo la solicitud
+   (de entre los que pueden firmarlo por marca y monto): hay una AGC esperando
    firma. Sin esa firma el gasto no avanza; ese es todo el motivo del mail.
 2. **Queda autorizada** -> a la cajera de cada razon social imputada: ya puede
    pagarse.
@@ -14,8 +15,9 @@ Reglas (aprendidas del Cotizador de Subastas, no son negociables):
   try/except. Un SMTP caido no puede voltear la carga del gasto.
 - Un mail por destinatario, nunca un `To:` con todos: no se ven las casillas
   entre si y un rebote no se lleva puesto al otro aviso.
-- Los destinatarios salen de env vars. Los defaults de abajo son los vigentes;
-  mover a alguien es tocar el `.env`, no el codigo. Lista vacia = no se avisa.
+- El mail de cada autorizante esta en la base (lo mantiene administracion desde
+  el panel). Las cajeras y la copia fija salen de env vars, con los defaults de
+  abajo; mover a alguien es tocar el `.env`. Lista vacia = no se avisa.
 - El link sale de `base_url()` (PUBLIC_BASE_URL), no de `request.url_root`
   pelado: detras de nginx el request dice `backend:5000` y el mail ya salio.
 - Sale una sola vez por transicion, marcada en la base (ver `_marcar`).
@@ -27,34 +29,15 @@ import os
 
 from mail_neostar import APP_COLOR, APP_NOMBRE, base_url, enviar_mail, mail_layout
 from models.database import get_db
-from services.marcas import CONCEPTOS, listas_habilitadas
+from services.marcas import CONCEPTOS
 from services.pdf_fill import fmt_money
-from services.solicitudes import marcas_de
+from services.solicitudes import ids_avisar_a, marcas_de
 
 log = logging.getLogger(__name__)
 
 # Ruta de la pantalla donde se firma: el mail lleva al detalle de la solicitud,
 # no al home. Ahi el autorizante elige su nombre y confirma con su PIN.
 RUTA_DETALLE = '/proceso-compra/solicitudes/{id}'
-
-# Autorizantes por planilla. La planilla (no la marca) es lo que decide quien
-# puede firmar: ver services/marcas.py. Con varias marcas tildadas solo quedan
-# habilitados los de Multimarca, y el aviso los sigue: le escribe a quien
-# realmente puede firmar ese gasto.
-_AUTORIZANTES = {
-    'nissan': 'mscerra@neostar.com.ar,iparolin@neostar.com.ar,'
-              'wpalomino@neostar.com.ar,iaguilar@neostar.com.ar',
-    'jeep': 'afernandez@neostar.com.ar,isiffredi@neostar.com.ar,'
-            'ldiscipio@neostar.com.ar,mcalvete@neostar.com.ar',
-    'jeep_byd': 'lcaceres@neostar.com.ar',
-    'kia': 'botero@neostar.com.ar,cbourquin@neostar.com.ar,'
-           'lromero@neostar.com.ar,mcolombera@neostar.com.ar',
-    'honda': 'gbru@neostar.com.ar,mgonzalez@neostar.com.ar',
-    'byd': 'lharik@neostar.com.ar',
-    'multimarca': 'lfalletti@neostar.com.ar,jazzolini@neostar.com.ar,'
-                  'dubiergo@neostar.com.ar,cgiorgetti@alcorosario.com.ar,'
-                  'storres@neostar.com.ar,vlottero@neostar.com.ar',
-}
 
 # Cajeras de administracion, por razon social a la que se imputa el pago.
 _CAJERAS = {
@@ -98,58 +81,21 @@ def _clave_empresa(empresa):
     return '_'.join(''.join(c if c.isalnum() else ' ' for c in texto).split())
 
 
-def _alcanza_la_marca(listas, monto):
-    """True si alguien de esas planillas puede cerrar solo un gasto de ese monto.
-
-    Sin esto, un gasto de una sola marca por encima del tope de todos los de su
-    planilla quedaria esperando una segunda firma que nadie pidio: los unicos
-    que lo cierran de una son los sin limite, que estan en Multimarca.
-    """
-    if not listas:
-        return False
-    conn = get_db()
-    try:
-        marcadores = ', '.join('?' * len(listas))
-        # monto_autorizado NULL = sin limite, y MAX() lo ignora: se cuenta aparte.
-        row = conn.execute(
-            f'SELECT SUM(monto_autorizado IS NULL) AS sin_limite, '
-            f'MAX(monto_autorizado) AS tope FROM autorizados '
-            f'WHERE activo = 1 AND lista IN ({marcadores})', listas).fetchone()
-    finally:
-        conn.close()
-    if row['sin_limite']:
-        return True
-    return row['tope'] is not None and float(monto or 0) <= row['tope']
-
-
-def listas_a_avisar(solicitud):
-    """Que planillas reciben el aviso de este gasto.
-
-    El aviso sigue a quien puede firmar, pero sin llamar a todo el mundo cada vez:
-
-    - Una sola marca -> su planilla. Los de Multimarca pueden firmar cualquier
-      gasto, pero avisarles de todos los convierte en una lista de correo que
-      nadie lee; se suman solo si el monto supera el tope de toda la planilla.
-    - Varias marcas -> solo Multimarca: con mas de una marca tildada,
-      `listas_habilitadas()` toma la interseccion y son los unicos habilitados.
-    - Marca sin planilla propia (Subaru, Showroom, Otro) -> Multimarca, que es
-      lo que devuelve `listas_habilitadas()`.
-    """
-    habilitadas = listas_habilitadas(marcas_de(solicitud))
-    especificas = [lista for lista in habilitadas if lista != 'multimarca']
-    if not especificas:
-        return habilitadas
-    if _alcanza_la_marca(especificas, solicitud.get('monto_total')):
-        return especificas
-    return especificas + ['multimarca']
-
-
 def destinatarios_autorizantes(solicitud):
-    """A quien hay que avisarle que este gasto espera firma."""
+    """A quien hay que avisarle que este gasto espera firma: los autorizados que
+    eligio quien cargo la solicitud, mas la copia fija de administracion.
+
+    No hay fallback a "toda la planilla": elegir es obligatorio en el alta, y un
+    aviso a todos es justamente lo que se quiso sacar."""
+    ids = ids_avisar_a(solicitud)
     destinos = []
-    for lista in listas_a_avisar(solicitud):
-        destinos += _lista(_config(f'AVISO_{lista.upper()}', _AUTORIZANTES.get(lista, '')))
-    # Copia fija para administracion/compras, ademas de los de la marca.
+    if ids:
+        conn = get_db()
+        try:
+            destinos = [r['email'] for r in conn.execute(
+                f'SELECT email FROM autorizados WHERE id IN ({", ".join("?" * len(ids))})', ids)]
+        finally:
+            conn.close()
     destinos += _lista(_config('AUTORIZA_NOTIF_EMAIL'))
     return _lista(','.join(destinos))
 

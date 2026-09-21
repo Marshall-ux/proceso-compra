@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { LISTAS, fmtMoney } from '../constants.js'
 import {
-  blanquearPin, cambiarActivoAutorizado, claveAdmin, desbloquearAutorizado, generarCodigoAlta,
+  blanquearPin, cambiarActivoAutorizado, cambiarEmailAutorizado, claveAdmin, desbloquearAutorizado, generarCodigoAlta,
   listarAutorizados, verificarClaveAdmin,
 } from '../services/api.js'
 
@@ -82,6 +82,15 @@ export default function AutorizadosPage() {
     await cambiarActivoAutorizado(a.id, false)
   })
 
+  const editarEmail = conError(async (a) => {
+    const email = prompt(`Mail de ${a.nombre} para el aviso de gastos a autorizar.
+
+` +
+                         `Dejalo vacío para que no se le pueda avisar.`, a.email || '')
+    if (email === null) return
+    await cambiarEmailAutorizado(a.id, email.trim())
+  })
+
   const reactivar = conError(async (a) => {
     await cambiarActivoAutorizado(a.id, true)
   })
@@ -102,7 +111,7 @@ export default function AutorizadosPage() {
         {desbloqueado ? (
           <>
             <span>🔓 <strong>Administración desbloqueada.</strong> Podés generar códigos de alta,
-              blanquear y desbloquear PINs.</span>
+              blanquear y desbloquear PINs, y cargar el mail de cada autorizado.</span>
             <button className="btn btn--ghost btn--sm" onClick={bloquearAdmin}>🔒 Bloquear</button>
           </>
         ) : (
@@ -189,6 +198,9 @@ export default function AutorizadosPage() {
                       {a.activo === false && (
                         <span className="badge badge--muted" style={{ marginLeft: '0.4rem' }}>De baja</span>
                       )}
+                      <div style={{ fontSize: '0.75rem', color: a.email ? 'var(--text-muted)' : 'var(--danger)' }}>
+                        {a.email || 'Sin mail: no se le puede avisar'}
+                      </div>
                     </td>
                     <td style={{ fontSize: '0.82rem' }}>{a.cargo}</td>
                     <td><span className="badge badge--muted">{LISTAS[a.lista] || a.lista}</span></td>
@@ -232,6 +244,9 @@ export default function AutorizadosPage() {
                                   {a.alta_pendiente ? 'Generar otro código' : 'Generar código de alta'}
                                 </button>
                               )}
+                              <button className="btn btn--ghost btn--sm" onClick={() => editarEmail(a)}>
+                                {a.email ? 'Cambiar mail' : 'Cargar mail'}
+                              </button>
                               <button className="btn btn--danger btn--sm" onClick={() => darDeBaja(a)}>
                                 Dar de baja
                               </button>

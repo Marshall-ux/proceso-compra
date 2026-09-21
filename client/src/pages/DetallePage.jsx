@@ -99,6 +99,7 @@ export default function DetallePage() {
           <div className="toolbar__info">
             {solicitud.proveedor_nombre} · {solicitud.marca} · $ {fmtMoney(solicitud.monto_total)}
             {solicitud.criticidad === 'urgente' && <> · <span className="badge badge--danger">Urgente</span></>}
+            {solicitud.avisados?.length > 0 && <> · 📧 Aviso a {solicitud.avisados.join(', ')}</>}
           </div>
           <div className="toolbar__info" style={{ marginTop: '0.35rem', display: 'flex', gap: '0.9rem', flexWrap: 'wrap' }}>
             {solicitud.facturas?.map((f, i) => (
