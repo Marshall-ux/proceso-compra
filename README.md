@@ -117,6 +117,87 @@ npm run dev                   # http://localhost:5173 (proxy /api -> :5000)
 | GET | `/api/autorizados` | Listado de autorizados (filtro: `lista`) |
 | POST | `/api/autorizados/:id/pin` | Alta o cambio de PIN |
 
+## Avisos por mail
+
+Dos avisos automáticos, cada uno en una transición del circuito:
+
+| Cuándo | A quién | Qué dice |
+|---|---|---|
+| Se carga un gasto (queda **pendiente**) | Los autorizantes habilitados para esa marca | Hay una AGC esperando firma; el gasto no avanza hasta que alguien autorice |
+| La última firma la deja **autorizada** | La cajera de cada razón social imputada | Ya se puede gestionar el pago |
+
+Reglas de la implementación (`server/services/avisos.py`):
+
+- El aviso sale **después** de persistir, y es **best-effort**: si el SMTP está caído,
+  la carga del gasto igual funciona y el fallo queda en el log.
+- **Un mail por destinatario**, nunca un `To:` con todos.
+- Sale **una sola vez** por transición: se marca en `solicitudes.notificado_at` y
+  `cajeras_notificado_at`. Editar un gasto ya cargado no vuelve a avisar.
+- El link va al detalle (`/proceso-compra/solicitudes/:id`), que es donde se firma.
+  **No se firma desde el mail**: un link que autoriza sin identificar a la persona es
+  una firma sin firmante. En la app se confirma con el PIN, como siempre.
+
+El transporte es el estándar de las apps de Neostar: SMTP de Gmail contra
+`neostar.no.reply@gmail.com`, con una **App Password propia de esta app** (se revoca sin
+tumbar las otras). Lo único que cambia el remitente entre apps es `MAIL_FROM_NOMBRE`.
+Nunca un `From:` `@neostar.com.ar`: ese dominio está en DMARC `p=reject` y rebota.
+**Sin `SMTP_*` configurado la app no manda nada y solo loguea**, así se puede desarrollar
+y testear sin cuenta de mail.
+
+### Variables de entorno
+
+| Variable | Rol |
+|---|---|
+| `APP_NOMBRE` | Nombre público de la app (remitente, asunto, pie). Default: *Autorizaciones de Compra*. |
+| `APP_COLOR` | Acento del header y del botón. Default `#2DB84B`. |
+| `SMTP_HOST` / `SMTP_PORT` | `smtp.gmail.com` / `587`. |
+| `SMTP_USER` | `neostar.no.reply@gmail.com`. Es el `From` real: Gmail reescribe cualquier otro. |
+| `SMTP_PASSWORD` | App Password de 16 caracteres, **sin** los espacios de los 4 grupos. |
+| `MAIL_FROM_NOMBRE` | Nombre del remitente. Normalmente igual a `APP_NOMBRE`. |
+| `MAIL_REPLY_TO` | A dónde van las respuestas. Sin definir, no se manda. |
+| `PUBLIC_BASE_URL` | Dominio con el que se arman los links (`http://192.168.41.39`). **Obligatorio en Docker**: detrás de nginx el request dice `backend:5000`. |
+| `AVISO_NISSAN`, `AVISO_JEEP`, `AVISO_JEEP_BYD`, `AVISO_KIA`, `AVISO_HONDA`, `AVISO_BYD`, `AVISO_MULTIMARCA` | Autorizantes a avisar, por planilla (separados por coma). Ver *A quién le llega* más abajo. |
+| `AUTORIZA_NOTIF_EMAIL` | Copia fija que recibe todos los avisos de gasto nuevo, sea de la marca que sea. |
+| `CAJA_ALCO_ROSARIO`, `CAJA_NEOSTAR`, `CAJA_XINOXIA`, `CAJA_DASEOS`, `CAJA_HIKARI` | Cajera de cada razón social, para el aviso de autorizada. |
+
+Los destinatarios tienen **default en el código** (`services/avisos.py`), así la app avisa
+aunque el `.env` esté pelado. Mover a alguien es tocar el `.env`, no el código; una lista
+**vacía** significa "no avisar a nadie". En el compose las variables van **sin `=`**: con
+`=${VAR}` se pasarían vacías y pisarían el default.
+
+### A quién le llega el aviso de gasto nuevo
+
+El aviso sigue a **quien puede firmar ese gasto**, pero sin escribirle a todo el mundo
+cada vez: los de Multimarca pueden autorizar cualquier marca, y avisarles de cada gasto
+los convierte en una lista de correo que nadie lee.
+
+| Gasto | Avisa a |
+|---|---|
+| Una sola marca, monto dentro del tope de alguien de esa planilla | Solo esa planilla |
+| Una sola marca, monto por encima del tope de **todos** los de esa planilla | Esa planilla **+** Multimarca |
+| Dos o más marcas tildadas | Solo Multimarca |
+| Marca sin planilla propia (Subaru, Showroom Funes, Cañada de Gómez, Otro) | Solo Multimarca |
+
+Las dos últimas filas no son una preferencia: con más de una marca tildada,
+`listas_habilitadas()` toma la intersección y **los de Multimarca son los únicos
+habilitados para firmar**. La segunda fila es lo que evita que un gasto grande quede
+colgado: si supera el tope de toda la planilla, ninguno de ellos puede cerrarlo solo y
+hace falta alguien sin límite, que está en Multimarca.
+
+Si querés que alguien reciba **todos** los avisos sin importar la marca, va en
+`AUTORIZA_NOTIF_EMAIL`, no en `AVISO_MULTIMARCA`.
+
+### Probar el envío
+
+```bash
+cd server
+python probar_mail.py                      # a la propia casilla
+python probar_mail.py alguien@neostar.com.ar
+```
+
+Manda un mail real con el **mismo** `enviar_mail()` de producción y nunca imprime la
+contraseña. Si ese llega, los avisos llegan.
+
 ## Autorizados
 
 Los 25 autorizados se cargan automáticamente al primer arranque desde
