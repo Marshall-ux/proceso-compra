@@ -127,6 +127,12 @@ def mail_layout(titulo, cuerpo_html, app_nombre=None, color=None):
 
     Lo único que cambia entre apps es `app_nombre` y `color`: la estructura, los
     radios y la tipografía son las mismas en todas.
+
+    DIVERGENCIA con el asset de la skill neostar-skill-mail: a la tarjeta se le
+    agregaron `align="center"` y `margin:0 auto`. Con el `align` del <td> solo,
+    Gmail la dejaba pegada a un costado en ventanas anchas. Si se re-sincroniza
+    el asset desde la skill, hay que volver a aplicarlo (y conviene subirlo allá,
+    junto con la versión Node, que tiene el mismo HTML).
     """
     app_nombre = app_nombre or APP_NOMBRE
     color = color or APP_COLOR
@@ -135,7 +141,7 @@ def mail_layout(titulo, cuerpo_html, app_nombre=None, color=None):
 <body style="margin:0; padding:0; background:#f8fafc;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc; padding:24px 12px;">
  <tr><td align="center">
-  <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; background:#ffffff; border:1px solid #e5e7eb; border-radius:16px; overflow:hidden; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Arial,sans-serif;">
+  <table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; margin:0 auto; background:#ffffff; border:1px solid #e5e7eb; border-radius:16px; overflow:hidden; font-family:'Inter',-apple-system,'Segoe UI',Roboto,Arial,sans-serif;">
    <tr><td style="background:{color}; padding:22px 32px;">
      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
        <td style="padding-right:14px; vertical-align:middle; line-height:0;">

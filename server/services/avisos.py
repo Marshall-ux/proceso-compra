@@ -191,9 +191,13 @@ def _asunto(texto):
     return ' '.join(str(texto or '').split())
 
 
-def _boton(texto, link):
+def _boton(texto, link, nota=''):
     """CTA del mail + el link en texto (hay clientes que no renderizan el boton,
     y ahi el link pegable es lo unico que queda).
+
+    `nota` es la aclaracion previa al link, y cambia segun a quien le escribimos:
+    lo del PIN solo tiene sentido para quien va a firmar. A la cajera el link le
+    sirve para mirar y descargar, no para autorizar nada.
 
     No se usa `boton_html()` de mail_neostar porque su pie dice que el link vence
     en 30 minutos y es de un solo uso: eso vale para el recupero de contrasena,
@@ -206,8 +210,7 @@ def _boton(texto, link):
        </td></tr>
      </table>
      <p style="margin:0 0 24px; font-size:13px; color:#6b7280; line-height:1.6;">
-       Se firma dentro de la app, con tu PIN. Si el boton no funciona, copia y pega
-       esta direccion en tu navegador:<br>
+       {nota}Si el botón no funciona, copiá y pegá esta dirección en tu navegador:<br>
        <span style="color:{APP_COLOR}; word-break:break-all;">{html.escape(link)}</span>
      </p>"""
 
@@ -278,22 +281,22 @@ def notificar_gasto_a_autorizar(solicitud, request=None):
     resumen_txt, resumen_html = _resumen(solicitud)
 
     texto = (
-        f'Se cargo un gasto que necesita autorizacion.\n\n'
+        f'Se cargó un gasto que necesita autorización.\n\n'
         f'{resumen_txt}\n\n'
         f'La solicitud queda PENDIENTE: no avanza hasta que un autorizante la firme.\n\n'
-        f'Para autorizarla, entra a la app y confirma con tu PIN:\n{link}\n\n'
-        f'--\nMail automatico de {APP_NOMBRE}'
+        f'Para autorizarla, entrá a la app y confirmá con tu PIN:\n{link}\n\n'
+        f'--\nMail automático de {APP_NOMBRE}'
     )
     cuerpo = (
         '<p style="margin:0 0 16px; font-size:15px; color:#111827; line-height:1.6;">'
-        f'{html.escape(solicitud.get("solicitado_por") or "Un colaborador")} cargo un gasto '
-        'que necesita tu autorizacion.</p>'
+        f'{html.escape(solicitud.get("solicitado_por") or "Un colaborador")} cargó un gasto '
+        'que necesita tu autorización.</p>'
         + resumen_html
         + '<p style="margin:0 0 24px; padding:14px 16px; background:#fff7ed; '
           'border-left:3px solid #f59e0b; border-radius:8px; font-size:14px; '
           'color:#111827; line-height:1.6;">La solicitud queda <strong>pendiente</strong> '
           'y no avanza hasta que alguien la autorice.</p>'
-        + _boton('Ver y autorizar', link)
+        + _boton('Ver y autorizar', link, 'Se firma dentro de la app, con tu PIN. ')
     )
     return _enviar_a_cada_uno(
         destinos, f'Gasto para autorizar: {proveedor} - $ {monto}',
@@ -324,21 +327,22 @@ def notificar_autorizada(solicitud, request=None):
     firmantes = ', '.join(a['nombre'] for a in (solicitud.get('autorizaciones') or []))
 
     texto = (
-        f'La solicitud #{solicitud["id"]} quedo AUTORIZADA.\n\n'
+        f'La solicitud #{solicitud["id"]} quedó AUTORIZADA.\n\n'
         f'{resumen_txt}\n'
-        + (f'Autorizo: {firmantes}\n' if firmantes else '')
-        + f'\nYa se puede gestionar el pago. La autorizacion, la factura y el ZIP '
-          f'estan en la app:\n{link}\n\n'
-          f'--\nMail automatico de {APP_NOMBRE}'
+        + (f'Autorizó: {firmantes}\n' if firmantes else '')
+        + f'\nYa se puede gestionar el pago. La autorización, la factura y el ZIP '
+          f'están en la app:\n{link}\n\n'
+          f'--\nMail automático de {APP_NOMBRE}'
     )
     cuerpo = (
         '<p style="margin:0 0 16px; font-size:15px; color:#111827; line-height:1.6;">'
-        f'La solicitud <strong>#{solicitud["id"]}</strong> quedo '
+        f'La solicitud <strong>#{solicitud["id"]}</strong> quedó '
         '<strong>autorizada</strong>: ya se puede gestionar el pago.</p>'
         + resumen_html
-        + (f'<p style="margin:0 0 24px; font-size:14px; color:#111827;">Autorizo: '
+        + (f'<p style="margin:0 0 24px; font-size:14px; color:#111827;">Autorizó: '
            f'<strong>{html.escape(firmantes)}</strong></p>' if firmantes else '')
-        + _boton('Ver la autorizacion', link)
+        # Sin la nota del PIN: la cajera no firma, entra a ver y a descargar.
+        + _boton('Ver la autorización', link)
     )
     return _enviar_a_cada_uno(
         destinos, f'Factura autorizada: {proveedor} - $ {monto}',
