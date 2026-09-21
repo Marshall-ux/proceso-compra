@@ -156,7 +156,7 @@ y testear sin cuenta de mail.
 | `MAIL_FROM_NOMBRE` | Nombre del remitente. Normalmente igual a `APP_NOMBRE`. |
 | `MAIL_REPLY_TO` | A dónde van las respuestas. Sin definir, no se manda. |
 | `PUBLIC_BASE_URL` | Dominio con el que se arman los links (`http://192.168.41.39`). **Obligatorio en Docker**: detrás de nginx el request dice `backend:5000`. |
-| `AVISO_NISSAN`, `AVISO_JEEP`, `AVISO_JEEP_BYD`, `AVISO_KIA`, `AVISO_HONDA`, `AVISO_BYD`, `AVISO_MULTIMARCA` | Autorizantes a avisar, por planilla (separados por coma). Los de Multimarca reciben los avisos de todas las marcas, porque pueden firmar cualquiera. |
+| `AVISO_NISSAN`, `AVISO_JEEP`, `AVISO_JEEP_BYD`, `AVISO_KIA`, `AVISO_HONDA`, `AVISO_BYD`, `AVISO_MULTIMARCA` | Autorizantes a avisar, por planilla (separados por coma). Ver *A quién le llega* más abajo. |
 | `AUTORIZA_NOTIF_EMAIL` | Copia fija que recibe todos los avisos de gasto nuevo, sea de la marca que sea. |
 | `CAJA_ALCO_ROSARIO`, `CAJA_NEOSTAR`, `CAJA_XINOXIA`, `CAJA_DASEOS`, `CAJA_HIKARI` | Cajera de cada razón social, para el aviso de autorizada. |
 
@@ -164,6 +164,28 @@ Los destinatarios tienen **default en el código** (`services/avisos.py`), así 
 aunque el `.env` esté pelado. Mover a alguien es tocar el `.env`, no el código; una lista
 **vacía** significa "no avisar a nadie". En el compose las variables van **sin `=`**: con
 `=${VAR}` se pasarían vacías y pisarían el default.
+
+### A quién le llega el aviso de gasto nuevo
+
+El aviso sigue a **quien puede firmar ese gasto**, pero sin escribirle a todo el mundo
+cada vez: los de Multimarca pueden autorizar cualquier marca, y avisarles de cada gasto
+los convierte en una lista de correo que nadie lee.
+
+| Gasto | Avisa a |
+|---|---|
+| Una sola marca, monto dentro del tope de alguien de esa planilla | Solo esa planilla |
+| Una sola marca, monto por encima del tope de **todos** los de esa planilla | Esa planilla **+** Multimarca |
+| Dos o más marcas tildadas | Solo Multimarca |
+| Marca sin planilla propia (Subaru, Showroom Funes, Cañada de Gómez, Otro) | Solo Multimarca |
+
+Las dos últimas filas no son una preferencia: con más de una marca tildada,
+`listas_habilitadas()` toma la intersección y **los de Multimarca son los únicos
+habilitados para firmar**. La segunda fila es lo que evita que un gasto grande quede
+colgado: si supera el tope de toda la planilla, ninguno de ellos puede cerrarlo solo y
+hace falta alguien sin límite, que está en Multimarca.
+
+Si querés que alguien reciba **todos** los avisos sin importar la marca, va en
+`AUTORIZA_NOTIF_EMAIL`, no en `AVISO_MULTIMARCA`.
 
 ### Probar el envío
 

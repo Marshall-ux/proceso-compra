@@ -98,10 +98,56 @@ def _clave_empresa(empresa):
     return '_'.join(''.join(c if c.isalnum() else ' ' for c in texto).split())
 
 
+def _alcanza_la_marca(listas, monto):
+    """True si alguien de esas planillas puede cerrar solo un gasto de ese monto.
+
+    Sin esto, un gasto de una sola marca por encima del tope de todos los de su
+    planilla quedaria esperando una segunda firma que nadie pidio: los unicos
+    que lo cierran de una son los sin limite, que estan en Multimarca.
+    """
+    if not listas:
+        return False
+    conn = get_db()
+    try:
+        marcadores = ', '.join('?' * len(listas))
+        # monto_autorizado NULL = sin limite, y MAX() lo ignora: se cuenta aparte.
+        row = conn.execute(
+            f'SELECT SUM(monto_autorizado IS NULL) AS sin_limite, '
+            f'MAX(monto_autorizado) AS tope FROM autorizados '
+            f'WHERE activo = 1 AND lista IN ({marcadores})', listas).fetchone()
+    finally:
+        conn.close()
+    if row['sin_limite']:
+        return True
+    return row['tope'] is not None and float(monto or 0) <= row['tope']
+
+
+def listas_a_avisar(solicitud):
+    """Que planillas reciben el aviso de este gasto.
+
+    El aviso sigue a quien puede firmar, pero sin llamar a todo el mundo cada vez:
+
+    - Una sola marca -> su planilla. Los de Multimarca pueden firmar cualquier
+      gasto, pero avisarles de todos los convierte en una lista de correo que
+      nadie lee; se suman solo si el monto supera el tope de toda la planilla.
+    - Varias marcas -> solo Multimarca: con mas de una marca tildada,
+      `listas_habilitadas()` toma la interseccion y son los unicos habilitados.
+    - Marca sin planilla propia (Subaru, Showroom, Otro) -> Multimarca, que es
+      lo que devuelve `listas_habilitadas()`.
+    """
+    habilitadas = listas_habilitadas(marcas_de(solicitud))
+    especificas = [lista for lista in habilitadas if lista != 'multimarca']
+    if not especificas:
+        return habilitadas
+    if _alcanza_la_marca(especificas, solicitud.get('monto_total')):
+        return especificas
+    return especificas + ['multimarca']
+
+
 def destinatarios_autorizantes(solicitud):
     """A quien hay que avisarle que este gasto espera firma."""
     destinos = []
-    for lista in listas_habilitadas(marcas_de(solicitud)):
+    for lista in listas_a_avisar(solicitud):
         destinos += _lista(_config(f'AVISO_{lista.upper()}', _AUTORIZANTES.get(lista, '')))
     # Copia fija para administracion/compras, ademas de los de la marca.
     destinos += _lista(_config('AUTORIZA_NOTIF_EMAIL'))
