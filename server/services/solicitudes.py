@@ -116,13 +116,15 @@ def validar(datos):
     return errores
 
 
-def crear(datos, items, facturas=None):
+def crear(datos, items, facturas=None, avisar_a=None):
     datos = _normalizar(datos)
     conn = get_db()
     try:
-        valores = [_valor(c, datos) for c in CAMPOS]
+        # avisar_a va aparte de CAMPOS: se fija en el alta y editar no lo toca.
+        columnas = CAMPOS + ('avisar_a',)
+        valores = [_valor(c, datos) for c in CAMPOS] + [json.dumps(avisar_a or [])]
         cur = conn.execute(
-            f'INSERT INTO solicitudes ({", ".join(CAMPOS)}) VALUES ({", ".join("?" * len(CAMPOS))})',
+            f'INSERT INTO solicitudes ({", ".join(columnas)}) VALUES ({", ".join("?" * len(columnas))})',
             valores,
         )
         solicitud_id = cur.lastrowid
@@ -201,6 +203,13 @@ def obtener(solicitud_id):
             conn.execute('SELECT * FROM facturas WHERE solicitud_id = ? AND pago_id IS NULL '
                          'ORDER BY orden', (solicitud_id,))
         ]
+        ids = ids_avisar_a(solicitud)
+        solicitud['avisar_a'] = ids
+        solicitud['avisados'] = [
+            r['nombre'] for r in conn.execute(
+                f'SELECT nombre FROM autorizados WHERE id IN ({", ".join("?" * len(ids))}) '
+                f'ORDER BY nombre', ids)
+        ] if ids else []
         solicitud['autorizaciones'] = [
             _fila_a_dict(r) for r in conn.execute(
                 'SELECT a.id, a.fecha, a.excedio_tope, a.monto_tope, au.nombre, au.cargo '
@@ -361,3 +370,86 @@ def autorizados_para(solicitud):
             'ya_firmo': r['nombre'] in ya_firmaron,
         })
     return autorizados
+
+
+def ids_avisar_a(solicitud):
+    """Ids de los autorizados a los que se les aviso del gasto (JSON en la columna)."""
+    crudo = solicitud.get('avisar_a') if isinstance(solicitud, dict) else solicitud['avisar_a']
+    if isinstance(crudo, list):
+        return crudo
+    try:
+        valor = json.loads(crudo or '[]')
+    except ValueError:
+        return []
+    return [int(x) for x in valor if str(x).isdigit()] if isinstance(valor, list) else []
+
+
+def candidatos_aviso(marcas, monto):
+    """A quien se le puede mandar el aviso de un gasto: los habilitados para la(s)
+    marca(s) que ademas pueden cerrarlo solos por monto (tope suficiente o sin limite).
+
+    Quien carga la solicitud elige de esta lista. Van primero los de la planilla de la
+    marca y despues Multimarca, que es la que cubre todo.
+    TODO concepto: cuando administracion pase que categorias firma cada uno, se filtra
+    tambien por el concepto del gasto.
+    """
+    listas = listas_habilitadas(marcas)
+    try:
+        monto = float(monto or 0)
+    except (TypeError, ValueError):
+        monto = 0.0
+    conn = get_db()
+    try:
+        marcadores = ', '.join('?' * len(listas))
+        rows = conn.execute(
+            f'SELECT id, nombre, cargo, lista, monto_autorizado, email FROM autorizados '
+            f'WHERE activo = 1 AND lista IN ({marcadores}) '
+            f'AND (monto_autorizado IS NULL OR monto_autorizado >= ?)', listas + [monto]).fetchall()
+    finally:
+        conn.close()
+    candidatos = [{
+        'id': r['id'],
+        'nombre': r['nombre'],
+        'cargo': r['cargo'],
+        'lista': r['lista'],
+        'monto_autorizado': r['monto_autorizado'],
+        'sin_limite': r['monto_autorizado'] is None,
+        'tiene_mail': '@' in (r['email'] or ''),
+    } for r in rows]
+    candidatos.sort(key=lambda c: (c['lista'] == 'multimarca', c['lista'], c['nombre']))
+    return candidatos
+
+
+def validar_avisar_a(datos):
+    """Quien carga la solicitud TIENE que elegir a quien avisarle: sin eso el aviso
+    terminaria yendo a toda la planilla, que es lo que se quiere evitar.
+
+    Devuelve (ids, errores). Se revalida contra los candidatos del servidor: el
+    navegador pudo quedar con una lista vieja (cambio la marca o el monto)."""
+    crudos = datos.get('avisar_a') or []
+    if not isinstance(crudos, list):
+        crudos = [crudos]
+    ids = []
+    for x in crudos:
+        try:
+            i = int(x)
+        except (TypeError, ValueError):
+            continue
+        if i not in ids:
+            ids.append(i)
+    if not ids:
+        return [], ['Elegí al menos un autorizado para avisarle que tiene que firmar']
+
+    marcas = lista_multi(datos, 'marcas', 'marca')
+    candidatos = {c['id']: c for c in candidatos_aviso(marcas, datos.get('monto_total'))}
+    errores = []
+    for i in ids:
+        c = candidatos.get(i)
+        if not c:
+            errores.append('Uno de los autorizados elegidos no puede firmar este gasto '
+                           '(por marca o por monto). Revisá la selección.')
+            break
+        if not c['tiene_mail']:
+            errores.append(f'{c["nombre"]} no tiene mail cargado: elegí a otra persona '
+                           f'o pedile a administración que lo cargue.')
+    return ids, errores

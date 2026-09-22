@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FormularioSolicitud from '../components/FormularioSolicitud.jsx'
+import SelectorAvisados from '../components/SelectorAvisados.jsx'
 import { crearSolicitud, extraerFacturas } from '../services/api.js'
 
 const VACIA = {
@@ -12,6 +13,7 @@ const VACIA = {
   solicitado_por: '', factura_numero: '',
   criticidad: '', criticidad_obs: '', requiere_oc: '', cbu_imagen: '',
   legajo_nombre: '', legajo_archivo: '', facturas: [], items: [],
+  avisar_a: [],   // ids de los autorizados a los que les llega el mail
 }
 
 export default function NuevaPage() {
@@ -143,6 +145,11 @@ export default function NuevaPage() {
           )}
 
           <FormularioSolicitud datos={datos} onChange={setDatos} autocompletados={autocompletados} />
+
+          <SelectorAvisados
+            marcas={datos.marcas} monto={datos.monto_total} valores={datos.avisar_a}
+            onChange={(avisar_a) => setDatos((d) => ({ ...d, avisar_a }))}
+          />
 
           <div className="toolbar" style={{ marginBottom: 0 }}>
             <button className="btn btn--ghost" onClick={() => setPaso(1)}>← Volver</button>

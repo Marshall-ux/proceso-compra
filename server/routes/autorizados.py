@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 
 from models.database import get_db
 from services.admin import requiere_admin, usando_default, verificar_admin
+from services.solicitudes import candidatos_aviso
 from services.pins import (
     esta_bloqueado, generar_codigo, hash_pin, registrar_intento, validar_pin, verificar_codigo,
     verificar_pin,
@@ -27,7 +28,7 @@ def listar():
     incluir_inactivos = request.args.get('todos') == '1'
     conn = get_db()
     try:
-        sql = ('SELECT id, nombre, cargo, lista, monto_autorizado, conceptos, bloqueado_hasta, '
+        sql = ('SELECT id, nombre, cargo, lista, monto_autorizado, conceptos, email, bloqueado_hasta, '
                'activo, (pin_hash IS NOT NULL) AS tiene_pin, '
                '(codigo_alta_hash IS NOT NULL) AS alta_pendiente FROM autorizados WHERE 1=1')
         params = []
@@ -52,6 +53,7 @@ def listar():
             'monto_autorizado': r['monto_autorizado'],
             'sin_limite': r['monto_autorizado'] is None,
             'conceptos': r['conceptos'],
+            'email': r['email'],
             'activo': bool(r['activo']),
             'tiene_pin': bool(r['tiene_pin']),
             'alta_pendiente': bool(r['alta_pendiente']),
@@ -59,6 +61,32 @@ def listar():
             'bloqueado_minutos': minutos,
         })
     return jsonify(salida)
+
+
+@bp.route('/autorizados/candidatos', methods=['GET'])
+def candidatos():
+    """A quien se le puede avisar de un gasto (?marca=X&marca=Y&monto=N): lo usa el
+    alta de la solicitud para que quien carga elija al autorizado."""
+    return jsonify(candidatos_aviso(request.args.getlist('marca'), request.args.get('monto')))
+
+
+@bp.route('/autorizados/<int:autorizado_id>/email', methods=['POST'])
+@requiere_admin
+def cambiar_email(autorizado_id):
+    """Mail al que le llega el aviso de gasto a autorizar. Vacio = no se le puede avisar."""
+    data = request.get_json(silent=True) or {}
+    email = str(data.get('email') or '').strip()
+    if email and ('@' not in email or ' ' in email or ',' in email):
+        return jsonify({'error': 'El mail no es válido (uno solo, sin espacios)'}), 400
+    conn = get_db()
+    try:
+        cur = conn.execute('UPDATE autorizados SET email = ? WHERE id = ?', (email, autorizado_id))
+        conn.commit()
+        if cur.rowcount == 0:
+            return jsonify({'error': 'El autorizado no existe'}), 404
+    finally:
+        conn.close()
+    return jsonify({'ok': True, 'email': email})
 
 
 @bp.route('/autorizados/<int:autorizado_id>/activo', methods=['POST'])

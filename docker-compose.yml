@@ -27,14 +27,8 @@ services:
       # Dominio con el que se arman los links de los mails. Sin esto el link sale
       # apuntando a http://backend:5000, que no existe fuera de la red de Docker.
       - PUBLIC_BASE_URL
-      # Destinatarios: autorizantes por planilla y cajeras por razón social.
-      - AVISO_NISSAN
-      - AVISO_JEEP
-      - AVISO_JEEP_BYD
-      - AVISO_KIA
-      - AVISO_HONDA
-      - AVISO_BYD
-      - AVISO_MULTIMARCA
+      # Destinatarios: copia fija de administración y cajeras por razón social.
+      # (El mail de cada autorizante está en la base: se carga desde el panel.)
       - AUTORIZA_NOTIF_EMAIL
       - CAJA_ALCO_ROSARIO
       - CAJA_NEOSTAR
