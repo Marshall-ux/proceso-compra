@@ -294,6 +294,7 @@ EMAILS = {
     'Ignacio Parolin': 'iparolin@neostar.com.ar',
     'Walter Palomino': 'wpalomino@neostar.com.ar',
     'Ignacio Aguilar': 'iaguilar@neostar.com.ar',
+    'Ma. Laura Henning': 'mlhenning@neostar.com.ar',
     # Jeep / Chrysler (+ BYD)
     'Andres Fernandez': 'afernandez@neostar.com.ar',
     'Ignacio Siffredi': 'isiffredi@neostar.com.ar',
@@ -316,4 +317,13 @@ EMAILS = {
     'Cecilia Giorgetti': 'cgiorgetti@alcorosario.com.ar',
     'Silvina Torres': 'storres@neostar.com.ar',
     'Virginia Lottero': 'vlottero@neostar.com.ar',
+    'Barbara Ayala': 'bayala@neostar.com.ar',
+    'Diego Gobetto': 'dgobetto@neostar.com.ar',
+    'Roman Cabrera': 'rcabrera@neostar.com.ar',
+    'Ignacio Vazquez': 'ivazquez@neostar.com.ar',
+    'Raul Garcia': 'rgarcia@neostar.com.ar',
+    'Sebastian Vazquez': 'sebastian@neostar.com.ar',
+    'Ezequiel Vazquez': 'ezequiel@neostar.com.ar',
+    'Jorgelina Vazquez': 'jorgelina@neostar.com.ar',
+    'Sergio Vazquez': 'sergio@neostar.com.ar',
 }
