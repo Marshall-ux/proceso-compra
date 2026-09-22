@@ -119,6 +119,21 @@ export const listarAutorizados = (lista, todos = false) => {
 }
 
 // Baja (activo=false) o reactivación (activo=true) de un autorizante.
+// A quién se le puede mandar el aviso de un gasto (por marca y monto).
+export const candidatosAviso = (marcas, monto) => {
+  const qs = new URLSearchParams()
+  for (const m of marcas || []) qs.append('marca', m)
+  qs.set('monto', monto || 0)
+  return pedir(`/autorizados/candidatos?${qs}`)
+}
+
+export const cambiarEmailAutorizado = (autorizadoId, email) =>
+  pedir(`/autorizados/${autorizadoId}/email`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+    body: JSON.stringify({ email }),
+  })
+
 export const cambiarActivoAutorizado = (autorizadoId, activo) =>
   pedir(`/autorizados/${autorizadoId}/activo`, {
     method: 'POST',

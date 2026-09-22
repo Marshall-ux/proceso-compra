@@ -156,36 +156,35 @@ y testear sin cuenta de mail.
 | `MAIL_FROM_NOMBRE` | Nombre del remitente. Normalmente igual a `APP_NOMBRE`. |
 | `MAIL_REPLY_TO` | A dónde van las respuestas. Sin definir, no se manda. |
 | `PUBLIC_BASE_URL` | Dominio con el que se arman los links (`http://192.168.41.39`). **Obligatorio en Docker**: detrás de nginx el request dice `backend:5000`. |
-| `AVISO_NISSAN`, `AVISO_JEEP`, `AVISO_JEEP_BYD`, `AVISO_KIA`, `AVISO_HONDA`, `AVISO_BYD`, `AVISO_MULTIMARCA` | Autorizantes a avisar, por planilla (separados por coma). Ver *A quién le llega* más abajo. |
 | `AUTORIZA_NOTIF_EMAIL` | Copia fija que recibe todos los avisos de gasto nuevo, sea de la marca que sea. |
 | `CAJA_ALCO_ROSARIO`, `CAJA_NEOSTAR`, `CAJA_XINOXIA`, `CAJA_DASEOS`, `CAJA_HIKARI` | Cajera de cada razón social, para el aviso de autorizada. |
 
-Los destinatarios tienen **default en el código** (`services/avisos.py`), así la app avisa
+Las cajeras tienen **default en el código** (`services/avisos.py`), así la app avisa
 aunque el `.env` esté pelado. Mover a alguien es tocar el `.env`, no el código; una lista
 **vacía** significa "no avisar a nadie". En el compose las variables van **sin `=`**: con
 `=${VAR}` se pasarían vacías y pisarían el default.
 
 ### A quién le llega el aviso de gasto nuevo
 
-El aviso sigue a **quien puede firmar ese gasto**, pero sin escribirle a todo el mundo
-cada vez: los de Multimarca pueden autorizar cualquier marca, y avisarles de cada gasto
-los convierte en una lista de correo que nadie lee.
+**Lo elige quien carga la solicitud, y es obligatorio.** Al final del alta aparece
+*¿A quién le avisamos?* con los autorizados que pueden firmar ese gasto:
 
-| Gasto | Avisa a |
-|---|---|
-| Una sola marca, monto dentro del tope de alguien de esa planilla | Solo esa planilla |
-| Una sola marca, monto por encima del tope de **todos** los de esa planilla | Esa planilla **+** Multimarca |
-| Dos o más marcas tildadas | Solo Multimarca |
-| Marca sin planilla propia (Subaru, Showroom Funes, Cañada de Gómez, Otro) | Solo Multimarca |
+- habilitados para la marca (su planilla o Multimarca; con varias marcas, solo
+  Multimarca, igual que para firmar), y
+- con tope suficiente para el monto, o sin límite.
 
-Las dos últimas filas no son una preferencia: con más de una marca tildada,
-`listas_habilitadas()` toma la intersección y **los de Multimarca son los únicos
-habilitados para firmar**. La segunda fila es lo que evita que un gasto grande quede
-colgado: si supera el tope de toda la planilla, ninguno de ellos puede cerrarlo solo y
-hace falta alguien sin límite, que está en Multimarca.
+Hay que tildar al menos uno; sin eso la solicitud no se guarda. El mail les llega solo
+a los tildados (más la copia de `AUTORIZA_NOTIF_EMAIL`), nunca a toda la planilla. En el
+detalle de la solicitud queda a quién se le avisó.
 
-Si querés que alguien reciba **todos** los avisos sin importar la marca, va en
-`AUTORIZA_NOTIF_EMAIL`, no en `AVISO_MULTIMARCA`.
+El mail de cada autorizado vive en la base y se carga en el panel de **Autorizados**
+con la clave de administración. Quien no tiene mail aparece en la lista pero no se
+puede tildar. Los mails iniciales están en `EMAILS` de `models/autorizados_seed.py` y
+solo se aplican a quien todavía no tiene uno, así que lo corregido en el panel no se
+pierde al reiniciar.
+
+Pendiente: filtrar también por **concepto**, cuando administración pase qué
+categorías del formulario firma cada autorizado.
 
 ### Probar el envío
 

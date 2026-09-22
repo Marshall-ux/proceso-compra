@@ -57,9 +57,11 @@ def para_firmar():
 def crear():
     data = request.get_json(silent=True) or {}
     errores = svc.validar(data)
+    avisar_a, errores_aviso = svc.validar_avisar_a(data)
+    errores += errores_aviso
     if errores:
         return jsonify({'error': 'Faltan datos obligatorios', 'errores': errores}), 400
-    solicitud_id = svc.crear(data, data.get('items', []), data.get('facturas', []))
+    solicitud_id = svc.crear(data, data.get('items', []), data.get('facturas', []), avisar_a)
     # El gasto nace pendiente: recien ACA, ya persistido, se avisa a los autorizantes.
     solicitud = svc.obtener(solicitud_id)
     _avisar(avisos.notificar_gasto_a_autorizar, solicitud)

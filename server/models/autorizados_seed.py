@@ -283,3 +283,47 @@ AUTORIZADOS = [
         'conceptos': 'TODOS LOS CONCEPTOS',
     },
 ]
+
+# Mail de cada autorizado, para el aviso de gasto a autorizar. Son los que estaban en
+# las listas por planilla de services/avisos.py; al resto se lo carga administracion
+# desde el panel de Autorizados. Solo se aplica a quien todavia no tiene mail (ver
+# database._seed_autorizados), asi que corregirlo en el panel no se pierde al reiniciar.
+EMAILS = {
+    # Nissan
+    'Marcos Scerra': 'mscerra@neostar.com.ar',
+    'Ignacio Parolin': 'iparolin@neostar.com.ar',
+    'Walter Palomino': 'wpalomino@neostar.com.ar',
+    'Ignacio Aguilar': 'iaguilar@neostar.com.ar',
+    'Ma. Laura Henning': 'mlhenning@neostar.com.ar',
+    # Jeep / Chrysler (+ BYD)
+    'Andres Fernandez': 'afernandez@neostar.com.ar',
+    'Ignacio Siffredi': 'isiffredi@neostar.com.ar',
+    'Laura Discipio': 'ldiscipio@neostar.com.ar',
+    'Marcelo Calvete': 'mcalvete@neostar.com.ar',
+    'Lisandro Cáceres': 'lcaceres@neostar.com.ar',
+    # Kia
+    'Bruno Otero': 'botero@neostar.com.ar',
+    'Cesar Bourquin': 'cbourquin@neostar.com.ar',
+    'Luciano Romero': 'lromero@neostar.com.ar',
+    'Mauricio Colombera': 'mcolombera@neostar.com.ar',
+    # Honda / BYD (Santa Fe)
+    'German R. Bru': 'gbru@neostar.com.ar',
+    'Marisol Gonzalez': 'mgonzalez@neostar.com.ar',
+    'Luciana Harik': 'lharik@neostar.com.ar',
+    # Multimarca
+    'Luciano Falletti': 'lfalletti@neostar.com.ar',
+    'Juan Azzolini': 'jazzolini@neostar.com.ar',
+    'Dora Ubiergo': 'dubiergo@neostar.com.ar',
+    'Cecilia Giorgetti': 'cgiorgetti@alcorosario.com.ar',
+    'Silvina Torres': 'storres@neostar.com.ar',
+    'Virginia Lottero': 'vlottero@neostar.com.ar',
+    'Barbara Ayala': 'bayala@neostar.com.ar',
+    'Diego Gobetto': 'dgobetto@neostar.com.ar',
+    'Roman Cabrera': 'rcabrera@neostar.com.ar',
+    'Ignacio Vazquez': 'ivazquez@neostar.com.ar',
+    'Raul Garcia': 'rgarcia@neostar.com.ar',
+    'Sebastian Vazquez': 'sebastian@neostar.com.ar',
+    'Ezequiel Vazquez': 'ezequiel@neostar.com.ar',
+    'Jorgelina Vazquez': 'jorgelina@neostar.com.ar',
+    'Sergio Vazquez': 'sergio@neostar.com.ar',
+}

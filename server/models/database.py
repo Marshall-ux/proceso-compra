@@ -1,7 +1,7 @@
 import os
 import sqlite3
 
-from models.autorizados_seed import AUTORIZADOS
+from models.autorizados_seed import AUTORIZADOS, EMAILS
 
 DATABASE_PATH = os.environ.get('DATABASE_PATH', os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'app.db'))
 
@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS autorizados (
     lista             TEXT NOT NULL,           -- nissan | jeep | jeep_byd | kia | honda | byd | multimarca
     monto_autorizado  REAL,                    -- NULL = SIN LIMITE
     conceptos         TEXT NOT NULL DEFAULT '',
+    email             TEXT NOT NULL DEFAULT '',  -- a donde le llega el aviso de gasto a autorizar
     pin_hash          TEXT,                    -- NULL = todavia no dio de alta su PIN
     activo            INTEGER NOT NULL DEFAULT 1,
     -- Alta de PIN: el admin genera un codigo de un solo uso y se lo entrega a la
@@ -77,6 +78,7 @@ CREATE TABLE IF NOT EXISTS solicitudes (
     -- la transición (alta / queda autorizada), no en cada guardado.
     notificado_at          TEXT,                     -- aviso a los autorizantes
     cajeras_notificado_at  TEXT,                     -- aviso a las cajeras
+    avisar_a            TEXT NOT NULL DEFAULT '',    -- JSON: ids de los autorizados que eligio quien cargo
     created_at          TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     updated_at          TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
@@ -188,6 +190,8 @@ _COLUMNAS_V2 = {
     # a autorizada las cajeras se enteran; el alta de esas viejas ya pasó hace rato.
     'notificado_at': 'TEXT',
     'cajeras_notificado_at': 'TEXT',
+    # A quien le llega el aviso de gasto nuevo: lo elige quien carga la solicitud.
+    'avisar_a': "TEXT NOT NULL DEFAULT ''",
 }
 
 
@@ -207,6 +211,7 @@ _COLUMNAS_AUTORIZADOS = {
     'codigo_alta_fecha': 'TEXT',
     'intentos_fallidos': 'INTEGER NOT NULL DEFAULT 0',
     'bloqueado_hasta': 'TEXT',
+    'email': "TEXT NOT NULL DEFAULT ''",
 }
 
 _COLUMNAS_FACTURAS = {
@@ -250,6 +255,12 @@ def _seed_autorizados(conn):
                 'INSERT INTO autorizados (nombre, cargo, lista, monto_autorizado, conceptos) VALUES (?, ?, ?, ?, ?)',
                 (a['nombre'], a['cargo'], a['lista'], a['monto_autorizado'], a['conceptos']),
             )
+
+    # El mail se carga solo si esta vacio: despues lo mantiene administracion desde el
+    # panel, y un reinicio no tiene que pisar lo que corrigieron ahi.
+    for nombre, email in EMAILS.items():
+        conn.execute("UPDATE autorizados SET email = ? WHERE nombre = ? AND email = ''",
+                     (email, nombre))
 
     # El roster (esta lista) es la fuente de verdad de quién es autorizante. A quien ya
     # no figura acá (bajas), se lo deja inactivo; no se borra, para conservar su historial.
