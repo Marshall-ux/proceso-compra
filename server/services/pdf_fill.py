@@ -301,7 +301,9 @@ def _casilleros_marcados(solicitud):
     marcar(PROVEEDOR_TIPO, solicitud.get('proveedor_tipo'))
     marcar(TIPO_ORDEN, solicitud.get('tipo_orden'))
     marcar(CONCEPTOS, solicitud.get('concepto'))
-    marcar(FORMA_PAGO, solicitud.get('forma_pago'))
+    # Forma de pago puede tener varias opciones separadas por comas.
+    for forma in str(solicitud.get('forma_pago') or '').split(','):
+        marcar(FORMA_PAGO, forma.strip())
     marcar(CONDICION_PAGO, solicitud.get('condicion_pago'))
 
     if solicitud.get('condicion_pago') == 'cuenta_corriente':
