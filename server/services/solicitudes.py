@@ -58,6 +58,17 @@ def lista_multi(datos, campo_lista, campo_scalar):
     return salida
 
 
+def formas_pago(valor):
+    """forma_pago admite varias opciones: se guarda como texto separado por comas
+    ("cheque,transferencia"). Acepta también una lista o el valor único viejo."""
+    crudos = valor if isinstance(valor, list) else str(valor or '').split(',')
+    salida = []
+    for x in (str(x).strip() for x in crudos):
+        if x and x not in salida:
+            salida.append(x)
+    return salida
+
+
 def _normalizar(datos):
     """Devuelve una copia de datos con empresas/marcas como JSON y los escalares
     empresa/marca fijados al primer valor (para búsqueda, listado y compatibilidad)."""
@@ -69,6 +80,7 @@ def _normalizar(datos):
         'marcas': json.dumps(marcas, ensure_ascii=False),
         'empresa': empresas[0] if empresas else '',
         'marca': marcas[0] if marcas else '',
+        'forma_pago': ','.join(formas_pago(datos.get('forma_pago'))),
     }
 
 
@@ -105,7 +117,7 @@ def validar(datos):
         errores.append('Indicá cuál es el concepto en "Otros"')
     if datos.get('tipo_orden') == 'abierta' and not str(datos.get('duracion_orden') or '').strip():
         errores.append('Indicá la duración de la orden abierta')
-    if (datos.get('forma_pago') == 'transferencia'
+    if ('transferencia' in formas_pago(datos.get('forma_pago'))
             and not str(datos.get('cbu') or '').strip()
             and not str(datos.get('cbu_imagen') or '').strip()):
         errores.append('Para transferencia hace falta el CBU (número o imagen)')

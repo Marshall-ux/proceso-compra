@@ -1,6 +1,6 @@
 // Grupo de casillas de selección múltiple (como los checkbox del formulario en papel),
-// con un atajo "Todas" para tildar/destildar todo de una.
-export default function MultiOpciones({ nombre, valores = [], opciones, onChange }) {
+// con un atajo "Todas" para tildar/destildar todo de una (se oculta con conTodas={false}).
+export default function MultiOpciones({ nombre, valores = [], opciones, onChange, conTodas = true }) {
   const lista = Array.isArray(valores) ? valores : []
 
   const alternar = (val) =>
@@ -16,13 +16,15 @@ export default function MultiOpciones({ nombre, valores = [], opciones, onChange
 
   return (
     <div className="opciones">
-      <button
-        type="button"
-        className={`opcion opcion--todas ${todasActivas ? 'opcion--activa' : ''}`}
-        onClick={todas}
-      >
-        {todasActivas ? '✓ Todas' : 'Todas'}
-      </button>
+      {conTodas && (
+        <button
+          type="button"
+          className={`opcion opcion--todas ${todasActivas ? 'opcion--activa' : ''}`}
+          onClick={todas}
+        >
+          {todasActivas ? '✓ Todas' : 'Todas'}
+        </button>
+      )}
       {opciones.map((o) => {
         const val = typeof o === 'string' ? o : o.valor
         const etiqueta = typeof o === 'string' ? o : o.etiqueta

@@ -16,6 +16,13 @@ export default function FormularioSolicitud({ datos, onChange, autocompletados =
   const setInput = (campo) => (e) => onChange({ ...datos, [campo]: e.target.value })
   const auto = (campo) => (autocompletados.includes(campo) ? 'field field--autocompletado' : 'field')
 
+  // forma_pago se guarda como texto separado por comas ("cheque,transferencia").
+  const formasPago = (datos.forma_pago || '').split(',').filter(Boolean)
+  const setFormasPago = (lista) => onChange({
+    ...datos,
+    forma_pago: FORMA_PAGO.map((o) => o.valor).filter((v) => lista.includes(v)).join(','),
+  })
+
   const suma = (datos.items || []).reduce((acc, it) => acc + (Number(it.total) || 0), 0)
   const difiere = Math.abs(suma - (Number(datos.monto_total) || 0)) > 0.5 && suma > 0
 
@@ -158,8 +165,8 @@ export default function FormularioSolicitud({ datos, onChange, autocompletados =
 
       <div className="seccion">
         <div className="seccion__titulo">Forma de pago</div>
-        <Opciones nombre="forma_pago" valor={datos.forma_pago} opciones={FORMA_PAGO} onChange={set('forma_pago')} />
-        {datos.forma_pago === 'transferencia' && (
+        <MultiOpciones nombre="forma_pago" valores={formasPago} opciones={FORMA_PAGO} onChange={setFormasPago} conTodas={false} />
+        {formasPago.includes('transferencia') && (
           <div className="grid grid--2" style={{ marginTop: '0.7rem' }}>
             <div className={auto('cbu')}>
               <label>CBU (número)</label>
