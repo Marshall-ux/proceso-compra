@@ -15,7 +15,7 @@ CAMPOS = (
     'contacto_telefono', 'contacto_mail', 'observaciones', 'solicitado_por', 'factura_nombre',
     'factura_archivo', 'factura_numero',
     # V2
-    'criticidad', 'criticidad_obs', 'requiere_oc', 'autopack_ok', 'cbu_imagen',
+    'criticidad', 'criticidad_obs', 'requiere_oc', 'cbu_imagen',
     'legajo_nombre', 'legajo_archivo',
     # Multi-selección (JSON)
     'empresas', 'marcas',
@@ -23,7 +23,9 @@ CAMPOS = (
 
 # Columnas numericas: se guardan como numero, no como texto.
 CAMPOS_FLOAT = {'monto_total'}
-CAMPOS_INT = {'autopack_ok'}
+# autopack_ok no va en CAMPOS: solo lo escribe la ruta del tilde, que exige la clave
+# de Autopack (ver services/autopack.py). Así editar una solicitud no lo pisa.
+CAMPOS_INT = set()
 
 CRITICIDADES = ('urgente', 'informado', 'otro')
 
