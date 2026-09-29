@@ -36,6 +36,15 @@ def _fecha_archivo(solicitud):
     return str(solicitud.get('created_at') or '')[:10] or 'sin-fecha'
 
 
+def _autopack(solicitud):
+    """'SI (Barbara Coll, 28/09/2026 14:32)' o 'NO'."""
+    if not solicitud.get('autopack_ok'):
+        return 'NO'
+    if not solicitud.get('autopack_por'):
+        return 'SI'
+    return f'SI ({solicitud["autopack_por"]}, {fmt_fecha_hora(solicitud.get("autopack_fecha"))})'
+
+
 def nombre_zip(solicitud):
     return (f'{_fecha_archivo(solicitud)}_Solicitud-{solicitud["id"]:04d}_'
             f'{_slug(solicitud.get("proveedor_nombre"))}.zip')
@@ -63,7 +72,7 @@ def _resumen(solicitud):
         f'Concepto            : {concepto or "-"}',
         f'Criticidad          : {criticidad}',
         f'Requiere OC         : {(solicitud.get("requiere_oc") or "-").upper()}',
-        f'Cargado en Autopack : {"SI" if solicitud.get("autopack_ok") else "NO"}',
+        f'Cargado en Autopack : {_autopack(solicitud)}',
         f'MONTO TOTAL         : $ {fmt_money(solicitud.get("monto_total"))}',
         f'Solicitado por      : {solicitud.get("solicitado_por") or "-"}',
         '',

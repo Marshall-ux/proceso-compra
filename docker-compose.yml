@@ -14,6 +14,8 @@ services:
       # Clave de administración (blanquear/generar códigos/desbloquear PINs).
       # El valor real va en el archivo .env (no se sube a git). Ver .env.example.
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-cambiar-esta-clave}
+      # Clave para tildar Autopack (solo administración). Sin definir, es 12345.
+      - AUTOPACK_PASSWORD=${AUTOPACK_PASSWORD:-12345}
       # Avisos por mail (ver README). Van SIN "=": así, si la variable no está en
       # el .env, manda el default del código y no una cadena vacía que lo pise.
       - APP_NOMBRE
