@@ -58,6 +58,17 @@ def lista_multi(datos, campo_lista, campo_scalar):
     return salida
 
 
+def formas_pago(valor):
+    """forma_pago admite varias opciones: se guarda como texto separado por comas
+    ("cheque,transferencia"). Acepta también una lista o el valor único viejo."""
+    crudos = valor if isinstance(valor, list) else str(valor or '').split(',')
+    salida = []
+    for x in (str(x).strip() for x in crudos):
+        if x and x not in salida:
+            salida.append(x)
+    return salida
+
+
 def _normalizar(datos):
     """Devuelve una copia de datos con empresas/marcas como JSON y los escalares
     empresa/marca fijados al primer valor (para búsqueda, listado y compatibilidad)."""
@@ -69,6 +80,7 @@ def _normalizar(datos):
         'marcas': json.dumps(marcas, ensure_ascii=False),
         'empresa': empresas[0] if empresas else '',
         'marca': marcas[0] if marcas else '',
+        'forma_pago': ','.join(formas_pago(datos.get('forma_pago'))),
     }
 
 
@@ -105,7 +117,7 @@ def validar(datos):
         errores.append('Indicá cuál es el concepto en "Otros"')
     if datos.get('tipo_orden') == 'abierta' and not str(datos.get('duracion_orden') or '').strip():
         errores.append('Indicá la duración de la orden abierta')
-    if (datos.get('forma_pago') == 'transferencia'
+    if ('transferencia' in formas_pago(datos.get('forma_pago'))
             and not str(datos.get('cbu') or '').strip()
             and not str(datos.get('cbu_imagen') or '').strip()):
         errores.append('Para transferencia hace falta el CBU (número o imagen)')
@@ -255,25 +267,36 @@ def listar(estado=None, busqueda=None):
 
 
 def para_firmar(autorizado_id):
-    """Solicitudes pendientes que este autorizante puede firmar: habilitado para la
-    marca y que todavía no firmó. Ordenadas por las que necesitan 2a firma primero."""
+    """Solicitudes pendientes que le tocan a este autorizante: habilitado para la
+    marca, que todavía no firmó y que quien cargó el gasto lo eligió para avisarle.
+    Ordenadas por las que necesitan 2a firma primero.
+
+    Si ninguno de los elegidos puede ya firmarla (solicitud anterior a la elección,
+    elegidos que ya firmaron y falta la 2a firma, o dados de baja), se muestra a
+    todos los habilitados para que no quede colgada. Es solo la lista: firmar desde
+    el detalle sigue abierto a cualquier habilitado."""
     conn = get_db()
     try:
         a = conn.execute('SELECT lista FROM autorizados WHERE id = ? AND activo = 1',
                          (autorizado_id,)).fetchone()
         if not a:
             return []
+        lista_de = {r['id']: r['lista'] for r in
+                    conn.execute('SELECT id, lista FROM autorizados WHERE activo = 1')}
         salida = []
         for s in conn.execute("SELECT * FROM solicitudes WHERE estado = 'pendiente' ORDER BY id DESC"):
-            if a['lista'] not in listas_habilitadas(marcas_de(s)):
+            listas = listas_habilitadas(marcas_de(s))
+            if a['lista'] not in listas:
                 continue
-            ya = conn.execute(
-                'SELECT 1 FROM autorizaciones WHERE solicitud_id = ? AND autorizado_id = ?',
-                (s['id'], autorizado_id)).fetchone()
-            if ya:
+            firmaron = {r['autorizado_id'] for r in conn.execute(
+                'SELECT autorizado_id FROM autorizaciones WHERE solicitud_id = ?', (s['id'],))}
+            if autorizado_id in firmaron:
                 continue
-            firmas = conn.execute('SELECT COUNT(*) AS n FROM autorizaciones WHERE solicitud_id = ?',
-                                  (s['id'],)).fetchone()['n']
+            elegidos = [i for i in ids_avisar_a(s)
+                        if lista_de.get(i) in listas and i not in firmaron]
+            if elegidos and autorizado_id not in elegidos:
+                continue
+            firmas = len(firmaron)
             d = _fila_a_dict(s)
             d['marcas'] = marcas_de(s)
             d['firmas'] = firmas
