@@ -14,6 +14,7 @@ CLAVE_DEFAULT = '12345'
 # mail (en minúsculas) -> nombre que queda registrado en la solicitud
 HABILITADOS = {
     'bcoll@neostar.com.ar': 'Barbara Coll',
+    'bayala@neostar.com.ar': 'Bárbara Ayala',
     'nblois@neostar.com.ar': 'Nicole Blois',
     'mlhenning@neostar.com.ar': 'Maria Laura Henning',
     'mspurello@neostar.com.ar': 'Maria Sol Purello',
