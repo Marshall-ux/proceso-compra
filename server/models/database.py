@@ -178,6 +178,9 @@ _COLUMNAS_V2 = {
     'criticidad_obs': "TEXT NOT NULL DEFAULT ''",
     'requiere_oc': "TEXT NOT NULL DEFAULT ''",
     'autopack_ok': 'INTEGER NOT NULL DEFAULT 0',
+    # Quién tildó (o destildó) Autopack y cuándo: solo lo hace administración.
+    'autopack_por': "TEXT NOT NULL DEFAULT ''",
+    'autopack_fecha': 'TEXT',
     'cbu_imagen': "TEXT NOT NULL DEFAULT ''",
     'legajo_nombre': "TEXT NOT NULL DEFAULT ''",
     'legajo_archivo': "TEXT NOT NULL DEFAULT ''",

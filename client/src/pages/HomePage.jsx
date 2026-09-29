@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import PanelLote from '../components/PanelLote.jsx'
 import robot from '../assets/robot-id.png'
-import { LISTAS, fmtMoney } from '../constants.js'
+import { LISTAS, fmtFechaHora, fmtMoney } from '../constants.js'
 import {
-  listarAutorizados, listarSolicitudes, marcarAutopack, paraFirmar, urlZipLote,
+  cerrarSesionAutopack, iniciarSesionAutopack, listarAutorizados, listarSolicitudes,
+  marcarAutopack, paraFirmar, sesionAutopack, urlZipLote,
 } from '../services/api.js'
 
 export default function HomePage() {
@@ -60,16 +61,64 @@ export default function HomePage() {
   const alternarTodas = () =>
     setSeleccion((s) => (s.length === solicitudes.length ? [] : solicitudes.map((x) => x.id)))
 
-  // El tilde de Autopack se guarda al instante; se refleja localmente para no recargar todo.
-  const cambiarAutopack = async (s, valor) => {
+  // Autopack lo tilda solo administración: mail + clave, pedidos una vez por pestaña.
+  const [autopack, setAutopack] = useState(sesionAutopack)
+  const [loginAutopack, setLoginAutopack] = useState(null)   // { s, valor } que espera el login
+  const [apEmail, setApEmail] = useState('')
+  const [apClave, setApClave] = useState('')
+  const [apError, setApError] = useState('')
+  const [apEntrando, setApEntrando] = useState(false)
+
+  // El tilde se guarda al instante; se refleja localmente para no recargar todo.
+  const guardarAutopack = async (s, valor) => {
     setSolicitudes((lista) =>
       lista.map((x) => (x.id === s.id ? { ...x, autopack_ok: valor ? 1 : 0 } : x)))
     try {
-      await marcarAutopack(s.id, valor)
+      const r = await marcarAutopack(s.id, valor)
+      setSolicitudes((lista) => lista.map((x) => (x.id === s.id
+        ? { ...x, autopack_por: r.autopack_por, autopack_fecha: r.autopack_fecha } : x)))
     } catch (e) {
-      setMensaje({ tipo: 'error', texto: e.message })
       cargar()
+      if (e.status === 401) {
+        // La clave cambió o la sesión quedó vieja: se vuelve a pedir.
+        cerrarSesionAutopack()
+        setAutopack(null)
+        setLoginAutopack({ s, valor })
+      } else {
+        setMensaje({ tipo: 'error', texto: e.message })
+      }
     }
+  }
+
+  const cambiarAutopack = (s, valor) => {
+    if (autopack) guardarAutopack(s, valor)
+    else {
+      setApError('')
+      setLoginAutopack({ s, valor })
+    }
+  }
+
+  const entrarAutopack = async (e) => {
+    e.preventDefault()
+    setApEntrando(true)
+    setApError('')
+    try {
+      const sesion = await iniciarSesionAutopack(apEmail.trim(), apClave)
+      setAutopack(sesion)
+      setApClave('')
+      const pendiente = loginAutopack
+      setLoginAutopack(null)
+      if (pendiente) guardarAutopack(pendiente.s, pendiente.valor)
+    } catch (err) {
+      setApError(err.message)
+    } finally {
+      setApEntrando(false)
+    }
+  }
+
+  const salirAutopack = () => {
+    cerrarSesionAutopack()
+    setAutopack(null)
   }
 
   const elegidas = solicitudes.filter((s) => seleccion.includes(s.id))
@@ -277,7 +326,9 @@ export default function HomePage() {
                         type="checkbox"
                         checked={!!s.autopack_ok}
                         onChange={(e) => cambiarAutopack(s, e.target.checked)}
-                        title="Marcar cuando la operación ya se cargó en Autopack"
+                        title={s.autopack_ok && s.autopack_por
+                          ? `Tildado por ${s.autopack_por} el ${fmtFechaHora(s.autopack_fecha)}`
+                          : 'Marcar cuando la operación ya se cargó en Autopack (solo administración)'}
                       />
                     </td>
                   </tr>
@@ -288,9 +339,54 @@ export default function HomePage() {
         )}
         <div className="field__nota" style={{ marginTop: '0.9rem' }}>
           La columna <strong>Autopack</strong> es el control de administración: se tilda cuando la
-          operación ya se cargó en el otro sistema.
+          operación ya se cargó en el otro sistema. Solo la puede tildar administración, con su mail
+          y la clave.
+          {autopack && (
+            <>{' '}Autopack: <strong>{autopack.nombre}</strong> ·{' '}
+              <button type="button" className="btn btn--ghost btn--sm" onClick={salirAutopack}>
+                Salir
+              </button>
+            </>
+          )}
         </div>
       </div>
+
+      {loginAutopack && (
+        <div className="modal-fondo" onClick={() => !apEntrando && setLoginAutopack(null)}>
+          <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={entrarAutopack}>
+            <div className="card__title" style={{ marginBottom: '0.3rem' }}>Autopack</div>
+            <p className="card__hint">
+              Solo administración puede {loginAutopack.valor ? 'tildar' : 'destildar'} Autopack.
+              Ingresá tu mail y la clave: se te pide una sola vez mientras tengas abierta esta pestaña.
+            </p>
+            {apError && <div className="alert alert--error">{apError}</div>}
+            <div className="field">
+              <label>Mail</label>
+              <input
+                type="email" autoFocus value={apEmail} onChange={(e) => setApEmail(e.target.value)}
+                placeholder="usuario@neostar.com.ar" autoComplete="username"
+              />
+            </div>
+            <div className="field">
+              <label>Clave</label>
+              <input
+                type="password" value={apClave} onChange={(e) => setApClave(e.target.value)}
+                autoComplete="current-password"
+              />
+            </div>
+            <div className="toolbar" style={{ marginBottom: 0, marginTop: '0.6rem' }}>
+              <button type="button" className="btn btn--ghost" onClick={() => setLoginAutopack(null)}
+                      disabled={apEntrando}>
+                Cancelar
+              </button>
+              <button type="submit" className="btn btn--primary"
+                      disabled={apEntrando || !apEmail.trim() || !apClave}>
+                {apEntrando ? <><span className="spinner" /> Verificando…</> : 'Ingresar'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </>
   )
 }

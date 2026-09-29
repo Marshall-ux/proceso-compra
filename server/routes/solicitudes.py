@@ -5,6 +5,7 @@ from datetime import datetime
 from flask import Blueprint, jsonify, request, send_file
 
 from models.database import get_db
+from services import autopack
 from services import avisos
 from services import pagos
 from services import solicitudes as svc
@@ -204,23 +205,44 @@ def autorizar_lote():
     })
 
 
+@bp.route('/autopack/verificar', methods=['POST'])
+def verificar_autopack():
+    """La usa la lista para abrir la sesión de Autopack (una vez por pestaña)."""
+    data = request.get_json(silent=True) or {}
+    nombre = autopack.identificar(data.get('email'), data.get('clave'))
+    if not nombre:
+        return jsonify({'error': 'Mail no habilitado para Autopack o clave incorrecta'}), 401
+    return jsonify({'ok': True, 'nombre': nombre})
+
+
 @bp.route('/solicitudes/<int:solicitud_id>/autopack', methods=['POST'])
 def marcar_autopack(solicitud_id):
     """Tilde de 'cargado en Autopack', para que administración no se saltee el paso
-    de cargar la operación en el otro sistema."""
+    de cargar la operación en el otro sistema. Solo lo tilda administración
+    (headers X-Autopack-Email / X-Autopack-Password) y queda registrado quién."""
+    nombre = autopack.identificar(request.headers.get('X-Autopack-Email'),
+                                  request.headers.get('X-Autopack-Password'))
+    if not nombre:
+        return jsonify({'error': 'Solo administración puede tildar Autopack: '
+                                 'ingresá tu mail y la clave'}), 401
     data = request.get_json(silent=True) or {}
     valor = 1 if data.get('ok') else 0
     conn = get_db()
     try:
         cur = conn.execute(
-            'UPDATE solicitudes SET autopack_ok = ?, updated_at = datetime("now", "localtime") '
-            'WHERE id = ?', (valor, solicitud_id))
+            'UPDATE solicitudes SET autopack_ok = ?, autopack_por = ?, '
+            'autopack_fecha = datetime("now", "localtime"), '
+            'updated_at = datetime("now", "localtime") WHERE id = ?',
+            (valor, nombre, solicitud_id))
         conn.commit()
         if cur.rowcount == 0:
             return jsonify({'error': 'La solicitud no existe'}), 404
+        row = conn.execute('SELECT autopack_por, autopack_fecha FROM solicitudes WHERE id = ?',
+                           (solicitud_id,)).fetchone()
     finally:
         conn.close()
-    return jsonify({'ok': True, 'autopack_ok': valor})
+    return jsonify({'ok': True, 'autopack_ok': valor,
+                    'autopack_por': row['autopack_por'], 'autopack_fecha': row['autopack_fecha']})
 
 
 # ------------------------------- pagos imputados ----------------------------

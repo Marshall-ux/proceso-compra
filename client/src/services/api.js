@@ -148,12 +148,40 @@ export const autorizarLote = (payload) =>
     body: JSON.stringify(payload),
   })
 
-export const marcarAutopack = (id, ok) =>
-  pedir(`/solicitudes/${id}/autopack`, {
+// --- Autopack: solo administración, con su mail y la clave (se piden una vez por pestaña) ---
+export const sesionAutopack = () => {
+  try {
+    return JSON.parse(sessionStorage.getItem('autopack') || 'null')
+  } catch {
+    return null
+  }
+}
+
+export const cerrarSesionAutopack = () => sessionStorage.removeItem('autopack')
+
+export const iniciarSesionAutopack = async (email, clave) => {
+  const { nombre } = await pedir('/autopack/verificar', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, clave }),
+  })
+  const sesion = { email, clave, nombre }
+  sessionStorage.setItem('autopack', JSON.stringify(sesion))
+  return sesion
+}
+
+export const marcarAutopack = (id, ok) => {
+  const sesion = sesionAutopack() || {}
+  return pedir(`/solicitudes/${id}/autopack`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Autopack-Email': sesion.email || '',
+      'X-Autopack-Password': sesion.clave || '',
+    },
     body: JSON.stringify({ ok }),
   })
+}
 
 // --- pagos imputados a una AGC ---
 export const crearPago = (id, payload) =>
