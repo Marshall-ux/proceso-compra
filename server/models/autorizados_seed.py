@@ -10,7 +10,7 @@ AUTORIZADOS = [
     {
         'nombre': 'Marcos Scerra',
         'cargo': 'Jefe de Ventas NISSAN',
-        'lista': 'nissan',
+        'lista': 'multimarca',  # pedido: puede autorizar cualquier marca
         'monto_autorizado': 3500000.00,
         'conceptos': 'Todo lo relativo a su operacion comercial a cargo, descuentos, accesorios, '
                      'gastos de MKT y todo lo relacionado al ejercicio de la marca.',
