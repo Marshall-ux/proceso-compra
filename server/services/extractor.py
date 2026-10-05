@@ -230,12 +230,6 @@ def _es_arca(texto):
     return bool(_RE_ARCA_NUMERO.search(texto)) and 'cae' in _norm(texto)
 
 
-def _numero_arca(texto):
-    """'Punto de Venta: 00002 Comp. Nro: 00004057' -> '00002-00004057'."""
-    m = _RE_ARCA_NUMERO.search(texto)
-    return f'{int(m.group(1)):05d}-{int(m.group(2)):08d}' if m else ''
-
-
 def _neto_arca(nums):
     """Total SIN IVA del renglon (el formulario lleva los renglones sin IVA y el IVA
     solo en el monto final). En la A se recalcula desde el subtotal c/IVA y la
@@ -249,23 +243,16 @@ def _neto_arca(nums):
     return parse_importe(nums[-1])
 
 
-# Alicuotas de IVA de ARCA, para validar los renglones contra el total de la factura.
-_ALICUOTAS_ARCA = (0, 2.5, 5, 10.5, 21, 27)
-
-
-def _cuadra_con_total(items, total):
-    """True si la suma de los renglones (sin IVA) mas alguna alicuota de ARCA da el
-    total de la factura, con tolerancia de $1. Si no cuadra, algun renglon se leyo mal
-    o falta: mejor no cargar renglones que cargarlos parciales."""
-    suma = sum(i['total'] for i in items)
-    return any(abs(suma * (1 + a / 100) - total) <= 1 for a in _ALICUOTAS_ARCA)
-
-
 def _items_arca(path):
     """Renglones del detalle de una factura ARCA. Las descripciones largas siguen en
     las lineas de abajo (pegadas y sangradas a la columna de descripcion); lo que
-    queda lejos (sellos, firmas manuscritas) no se toma."""
+    queda lejos (sellos, firmas manuscritas) no se toma.
+
+    Devuelve (items, suma_final): `suma_final` suma el ultimo importe de cada renglon,
+    que ya trae el IVA de ese renglon (A: subtotal c/IVA; B/C: subtotal), para
+    compararlo con el total de la factura aunque haya alicuotas mezcladas."""
     items = []
+    suma_final = 0.0
     with pdfplumber.open(path) as pdf:
         for page in pdf.pages:
             texto_pagina = page.extract_text() or ''
@@ -278,10 +265,12 @@ def _items_arca(path):
                 m = _RE_ARCA_ITEM.match(texto)
                 if m and not any(p in _norm(texto) for p in ('importe', 'subtotal c')):
                     cantidad = parse_importe(m.group('cant'))
-                    total = _neto_arca(m.group('nums').split())
+                    nums = m.group('nums').split()
+                    total = _neto_arca(nums)
                     if cantidad <= 0 or total <= 0:
                         actual = None
                         continue
+                    suma_final += parse_importe(nums[-1])
                     item = {
                         'descripcion': m.group('desc').strip(),
                         'cantidad': cantidad,
@@ -300,7 +289,7 @@ def _items_arca(path):
                         actual = (item, {**previa, 'bottom': linea['bottom']})
                         continue
                     actual = None
-    return items
+    return items, suma_final
 
 
 def _condiciones_pago(texto):
@@ -362,13 +351,12 @@ def extraer_datos_factura(path):
         'cbu': cbu.group(1) if cbu else '',
     }
 
-    # Formato ARCA: numero de comprobante y renglones salen de su estructura fija.
-    # Cualquier otro formato sigue con la extraccion generica de arriba.
+    # Formato ARCA: solo los renglones salen de su estructura fija; `datos` queda como
+    # la extraccion generica. Se aceptan solo si la suma de los importes finales llega
+    # al total de la factura: si falta un renglon, mejor ninguno que uno parcial.
     if _es_arca(texto):
-        datos['factura_numero'] = _numero_arca(texto)
-        datos['proveedor_nombre'] = datos['proveedor_nombre'].strip(' |[]')
-        items_arca = _items_arca(path)
-        if items_arca and _cuadra_con_total(items_arca, total):
+        items_arca, suma_final = _items_arca(path)
+        if items_arca and abs(suma_final - total) <= 1:
             items = items_arca
 
     # Proveedor conocido por CUIT (nombre no legible en el texto): se resuelve solo.
