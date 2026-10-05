@@ -207,6 +207,90 @@ def _items(lineas):
     return items
 
 
+# --- Formato estandar de ARCA ("Comprobantes en linea" / factura electronica) ---------
+# Solo se usa si la factura tiene ese formato; si no, queda la extraccion generica.
+
+_RE_ARCA_NUMERO = re.compile(
+    r'Punto\s+de\s+Venta:?\s*(\d{1,5})\s+Comp\.?\s*N[ro°º]*\.?:?\s*(\d{1,8})', re.I)
+
+# Renglon del detalle: [codigo] descripcion cantidad unidad precio %bonif ... total
+# (A: ... subtotal alicuota% subtotal_c/IVA; B/C: ... imp.bonif subtotal).
+_RE_ARCA_ITEM = re.compile(
+    r'^(?:\d{1,6}\s+)?(?P<desc>.+?)\s+(?P<cant>\d+(?:[.,]\d+)?)\s+'
+    r'(?P<unidad>[A-Za-zÁÉÍÓÚáéíóúñÑ.]+(?:\s[A-Za-zÁÉÍÓÚáéíóúñÑ.]+)?)\s+'
+    r'(?P<nums>(?:[\d.,]+%?\s+){2,}[\d.,]+)$')
+
+# Distancia vertical maxima (pt) para que una linea sea continuacion de la descripcion.
+_ARCA_GAP_CONTINUACION = 6
+
+
+def _es_arca(texto):
+    """True si la factura tiene el formato estandar de ARCA (punto de venta + numero
+    de comprobante en la cabecera y CAE al pie)."""
+    return bool(_RE_ARCA_NUMERO.search(texto)) and 'cae' in _norm(texto)
+
+
+def _numero_arca(texto):
+    """'Punto de Venta: 00002 Comp. Nro: 00004057' -> '00002-00004057'."""
+    m = _RE_ARCA_NUMERO.search(texto)
+    return f'{int(m.group(1)):05d}-{int(m.group(2)):08d}' if m else ''
+
+
+def _neto_arca(nums):
+    """Total SIN IVA del renglon (el formulario lleva los renglones sin IVA y el IVA
+    solo en el monto final). En la A se recalcula desde el subtotal c/IVA y la
+    alicuota, que el OCR lee mejor que el subtotal neto (a veces pierde la coma).
+    En B/C no hay columna de IVA: el ultimo importe es el subtotal."""
+    for token in nums[:-1]:
+        if token.endswith('%'):
+            alicuota = parse_importe(token[:-1])
+            con_iva = parse_importe(nums[-1])
+            return round(con_iva / (1 + alicuota / 100), 2)
+    return parse_importe(nums[-1])
+
+
+def _items_arca(path):
+    """Renglones del detalle de una factura ARCA. Las descripciones largas siguen en
+    las lineas de abajo (pegadas y sangradas a la columna de descripcion); lo que
+    queda lejos (sellos, firmas manuscritas) no se toma."""
+    items = []
+    with pdfplumber.open(path) as pdf:
+        for page in pdf.pages:
+            texto_pagina = page.extract_text() or ''
+            # ARCA repite el comprobante en DUPLICADO/TRIPLICADO: solo vale el original.
+            if re.search(r'\b(DUPLICADO|TRIPLICADO)\b', texto_pagina[:200]):
+                continue
+            actual = None   # (item, linea) del ultimo renglon, para sumar continuaciones
+            for linea in page.extract_text_lines():
+                texto = linea['text'].strip()
+                m = _RE_ARCA_ITEM.match(texto)
+                if m and not any(p in _norm(texto) for p in ('importe', 'subtotal c')):
+                    cantidad = parse_importe(m.group('cant'))
+                    total = _neto_arca(m.group('nums').split())
+                    if cantidad <= 0:
+                        actual = None
+                        continue
+                    item = {
+                        'descripcion': m.group('desc').strip(),
+                        'cantidad': cantidad,
+                        'precio': round(total / cantidad, 2),
+                        'total': total,
+                    }
+                    items.append(item)
+                    actual = (item, linea)
+                    continue
+                if actual:
+                    item, previa = actual
+                    pegada = linea['top'] - previa['bottom'] < _ARCA_GAP_CONTINUACION
+                    sangrada = linea['x0'] > previa['x0'] + 10
+                    if pegada and sangrada and 'importe' not in _norm(texto):
+                        item['descripcion'] += ' ' + texto
+                        actual = (item, {**previa, 'bottom': linea['bottom']})
+                        continue
+                    actual = None
+    return items
+
+
 def _condiciones_pago(texto):
     """Devuelve (condicion_pago, condicion_dias)."""
     n = _norm(texto)
@@ -265,6 +349,13 @@ def extraer_datos_factura(path):
         'contacto_telefono': telefono,
         'cbu': cbu.group(1) if cbu else '',
     }
+
+    # Formato ARCA: numero de comprobante y renglones salen de su estructura fija.
+    # Cualquier otro formato sigue con la extraccion generica de arriba.
+    if _es_arca(texto):
+        datos['factura_numero'] = _numero_arca(texto)
+        datos['proveedor_nombre'] = datos['proveedor_nombre'].strip(' |[]')
+        items = _items_arca(path) or items
 
     # Proveedor conocido por CUIT (nombre no legible en el texto): se resuelve solo.
     if datos['cuit'] in PROVEEDORES_CONOCIDOS:
