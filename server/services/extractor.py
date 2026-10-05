@@ -249,6 +249,18 @@ def _neto_arca(nums):
     return parse_importe(nums[-1])
 
 
+# Alicuotas de IVA de ARCA, para validar los renglones contra el total de la factura.
+_ALICUOTAS_ARCA = (0, 2.5, 5, 10.5, 21, 27)
+
+
+def _cuadra_con_total(items, total):
+    """True si la suma de los renglones (sin IVA) mas alguna alicuota de ARCA da el
+    total de la factura, con tolerancia de $1. Si no cuadra, algun renglon se leyo mal
+    o falta: mejor no cargar renglones que cargarlos parciales."""
+    suma = sum(i['total'] for i in items)
+    return any(abs(suma * (1 + a / 100) - total) <= 1 for a in _ALICUOTAS_ARCA)
+
+
 def _items_arca(path):
     """Renglones del detalle de una factura ARCA. Las descripciones largas siguen en
     las lineas de abajo (pegadas y sangradas a la columna de descripcion); lo que
@@ -267,7 +279,7 @@ def _items_arca(path):
                 if m and not any(p in _norm(texto) for p in ('importe', 'subtotal c')):
                     cantidad = parse_importe(m.group('cant'))
                     total = _neto_arca(m.group('nums').split())
-                    if cantidad <= 0:
+                    if cantidad <= 0 or total <= 0:
                         actual = None
                         continue
                     item = {
@@ -355,7 +367,9 @@ def extraer_datos_factura(path):
     if _es_arca(texto):
         datos['factura_numero'] = _numero_arca(texto)
         datos['proveedor_nombre'] = datos['proveedor_nombre'].strip(' |[]')
-        items = _items_arca(path) or items
+        items_arca = _items_arca(path)
+        if items_arca and _cuadra_con_total(items_arca, total):
+            items = items_arca
 
     # Proveedor conocido por CUIT (nombre no legible en el texto): se resuelve solo.
     if datos['cuit'] in PROVEEDORES_CONOCIDOS:
