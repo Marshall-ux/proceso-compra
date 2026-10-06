@@ -41,7 +41,8 @@ def _con_disponibles(solicitud):
 @bp.route('/solicitudes', methods=['GET'])
 def listar():
     return jsonify(svc.listar(estado=request.args.get('estado'),
-                              busqueda=request.args.get('q')))
+                              busqueda=request.args.get('q'),
+                              empresa=request.args.get('empresa')))
 
 
 @bp.route('/solicitudes/para-firmar', methods=['GET'])

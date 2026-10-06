@@ -246,7 +246,7 @@ def obtener(solicitud_id):
         conn.close()
 
 
-def listar(estado=None, busqueda=None):
+def listar(estado=None, busqueda=None, empresa=None):
     conn = get_db()
     try:
         sql = ('SELECT s.*, '
@@ -257,11 +257,16 @@ def listar(estado=None, busqueda=None):
         if estado:
             sql += ' AND s.estado = ?'
             params.append(estado)
+        if empresa:
+            # empresas es un JSON (multi-selección); empresa, el escalar legacy.
+            sql += ' AND (s.empresas LIKE ? OR s.empresa = ?)'
+            params += [f'%{json.dumps(empresa, ensure_ascii=False)}%', empresa]
         if busqueda:
             sql += (' AND (s.proveedor_nombre LIKE ? OR s.cuit LIKE ? OR s.marca LIKE ? '
                     'OR s.factura_numero LIKE ? OR s.solicitado_por LIKE ? '
+                    'OR s.empresa LIKE ? OR s.empresas LIKE ? '
                     'OR EXISTS (SELECT 1 FROM facturas f WHERE f.solicitud_id = s.id AND f.numero LIKE ?))')
-            params += [f'%{busqueda}%'] * 6
+            params += [f'%{busqueda}%'] * 8
         sql += ' ORDER BY s.id DESC'
         return [_fila_a_dict(r) for r in conn.execute(sql, params)]
     finally:
