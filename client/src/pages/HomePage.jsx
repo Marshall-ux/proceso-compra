@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import PanelLote from '../components/PanelLote.jsx'
 import robot from '../assets/robot-id.png'
-import { LISTAS, fmtFechaHora, fmtMoney } from '../constants.js'
+import { EMPRESAS, LISTAS, fmtFechaHora, fmtMoney } from '../constants.js'
 import {
   cerrarSesionAutopack, iniciarSesionAutopack, listarAutorizados, listarSolicitudes,
   marcarAutopack, paraFirmar, sesionAutopack, urlZipLote,
@@ -13,6 +13,7 @@ export default function HomePage() {
   const [solicitudes, setSolicitudes] = useState([])
   const [busqueda, setBusqueda] = useState('')
   const [estado, setEstado] = useState('')
+  const [empresa, setEmpresa] = useState('')
   const [cargando, setCargando] = useState(true)
   const [seleccion, setSeleccion] = useState([])
   const [mensaje, setMensaje] = useState(null)
@@ -44,11 +45,11 @@ export default function HomePage() {
   const cargar = useCallback(async () => {
     setCargando(true)
     try {
-      setSolicitudes(await listarSolicitudes({ q: busqueda, estado }))
+      setSolicitudes(await listarSolicitudes({ q: busqueda, estado, empresa }))
     } finally {
       setCargando(false)
     }
-  }, [busqueda, estado])
+  }, [busqueda, estado, empresa])
 
   useEffect(() => {
     const t = setTimeout(cargar, 250)
@@ -192,7 +193,7 @@ export default function HomePage() {
         <div className="toolbar">
           <div className="toolbar__actions">
             <input
-              type="text" className="cell-input" placeholder="Buscar proveedor, CUIT, marca…"
+              type="text" className="cell-input" placeholder="Buscar proveedor, CUIT, marca, razón social…"
               value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
               style={{ border: '1px solid var(--border-strong)', minWidth: 260, padding: '0.5rem 0.7rem' }}
             />
@@ -206,6 +207,16 @@ export default function HomePage() {
               <option value="">Todas</option>
               <option value="pendiente">Pendientes</option>
               <option value="autorizada">Autorizadas</option>
+            </select>
+            <select
+              value={empresa} onChange={(e) => setEmpresa(e.target.value)}
+              style={{
+                padding: '0.5rem 0.7rem', borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border-strong)', fontFamily: 'inherit',
+              }}
+            >
+              <option value="">Todas las razones sociales</option>
+              {EMPRESAS.map((e) => <option key={e} value={e}>{e}</option>)}
             </select>
           </div>
           <button className="btn btn--primary" onClick={() => navigate('/nueva')}>

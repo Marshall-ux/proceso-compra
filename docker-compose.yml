@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile.backend
     volumes:
       - ./server:/app
+      # Tapa el .venv local para que el contenedor no vea el entorno de Windows.
+      - /app/.venv
       - sqlite_data:/app/data
       - ./server/uploads:/app/uploads
       - ./server/generated:/app/generated
