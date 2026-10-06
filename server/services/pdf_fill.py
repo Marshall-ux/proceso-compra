@@ -38,7 +38,6 @@ CAMPO_CUIT = 'Text35'
 CAMPO_MARCA_OTRO = 'Text22'
 CAMPO_MONTO_FINAL = 'Text60'
 CAMPO_CBU = 'Text61'
-CAMPO_DIAS_OTRO = 'Text69'
 CAMPO_CONTACTO = 'Text74'
 CAMPO_TELEFONO = 'Text75'
 CAMPO_MAIL = 'Text76'
@@ -104,6 +103,12 @@ MAX_ITEMS = len(FILAS_ITEMS)
 ZONA_DURACION_ORDEN = (415.0, 521.0, 532.8, 533.0)
 ZONA_CONCEPTO_OTRO = (247.0, 451.5, 532.8, 463.0)
 ZONA_CONDICION_OTRAS = (437.0, 202.5, 532.8, 214.0)
+# "____ DÍAS" de cuenta corriente: los dias se escriben sobre la linea de puntos.
+# Arranca donde estaba el cuadradito (ya tapado) para que entren 3 digitos (hasta 365).
+ZONA_DIAS_OTRO = (348.6, 202.5, 368.0, 214.0)
+# Delante de esa linea la hoja trae un glifo que la fuente dibuja como un cuadradito;
+# en el original lo tapaba el fondo del campo Text69, que al aplanar desaparece.
+TAPA_CUADRADITO_DIAS = (348.6, 205.3, 354.8, 214.0)
 
 # Recuadros de firma del original (tampoco son campos).
 CAJA_SOLICITANTE = (54.4, 69.0, 293.7, 113.4)
@@ -359,11 +364,19 @@ def _completar_overlay(solicitud):
     ov.campo(CAMPO_MONTO_FINAL, '$ ' + fmt_money(solicitud.get('monto_total')), bold=True)
     ov.campo(CAMPO_CBU, solicitud.get('cbu'), size=7.5)
 
+    x0, y0, x1, y1 = TAPA_CUADRADITO_DIAS
+    ov.c.setFillColorRGB(1, 1, 1)
+    ov.c.rect(x0, y0, x1 - x0, y1 - y0, stroke=0, fill=1)
+    ov.c.setFillColor(black)
+
     condicion = solicitud.get('condicion_pago')
     if condicion == 'cuenta_corriente':
         dias = str(solicitud.get('condicion_dias') or '')
         if dias and dias not in CONDICION_DIAS:
-            ov.campo(CAMPO_DIAS_OTRO, dias, size=7, alinear='centro')
+            # Sin recortar: si no entra a 7 pt, se achica la letra hasta que entre.
+            x0, _, x1, _ = ZONA_DIAS_OTRO
+            size = min(7, 7 * (x1 - x0 - 4) / stringWidth(dias, 'Helvetica', 7))
+            ov.texto_en(ZONA_DIAS_OTRO, dias, size=size, alinear='centro')
     if condicion == 'otras':
         ov.texto_en(ZONA_CONDICION_OTRAS, solicitud.get('condicion_otras'), size=6.5)
 
