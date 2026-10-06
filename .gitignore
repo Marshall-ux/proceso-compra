@@ -37,3 +37,7 @@ docs/_*.pdf
 # Facturas/autorizaciones reales que se dejan en la raiz para probar: NO subir.
 # (los ejemplos versionados viven en docs/)
 /*.pdf
+
+# Ejemplos traidos del server (bases, PDFs, exports): NO subir.
+/ejemplos*
+*.tar.gz
