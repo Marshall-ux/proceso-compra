@@ -4,7 +4,7 @@ import CambioTipoOrden from '../components/CambioTipoOrden.jsx'
 import FormularioSolicitud from '../components/FormularioSolicitud.jsx'
 import PanelAutorizacion from '../components/PanelAutorizacion.jsx'
 import SeccionPagos from '../components/SeccionPagos.jsx'
-import { fmtMoney } from '../constants.js'
+import { fmtImporte, fmtMoney } from '../constants.js'
 import {
   actualizarSolicitud, eliminarSolicitud, obtenerSolicitud,
   urlCbuImagen, urlFactura, urlLegajo, urlPdf, urlPdfCompleto, urlZip,
@@ -106,7 +106,8 @@ export default function DetallePage() {
                 </span>}
           </h1>
           <div className="toolbar__info">
-            {solicitud.proveedor_nombre} · {solicitud.marca} · $ {fmtMoney(solicitud.monto_total)}
+            {solicitud.proveedor_nombre} · {solicitud.marca} · {fmtImporte(solicitud.monto_total, solicitud.moneda)}
+            {solicitud.moneda === 'USD' && <> (TC {fmtMoney(solicitud.tipo_cambio)} = $ {fmtMoney(solicitud.monto_pesos)})</>}
             {solicitud.criticidad === 'urgente' && <> · <span className="badge badge--danger">Urgente</span></>}
             {solicitud.avisados?.length > 0 && <> · 📧 Aviso a {solicitud.avisados.join(', ')}</>}
           </div>

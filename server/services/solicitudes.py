@@ -3,6 +3,7 @@
 import json
 
 from models.database import get_db
+from services import moneda as mon
 from services.marcas import listas_habilitadas
 from services.pins import esta_bloqueado
 
@@ -19,10 +20,12 @@ CAMPOS = (
     'legajo_nombre', 'legajo_archivo',
     # Multi-selección (JSON)
     'empresas', 'marcas',
+    # Moneda (ver services/moneda.py)
+    'moneda', 'tipo_cambio',
 )
 
 # Columnas numericas: se guardan como numero, no como texto.
-CAMPOS_FLOAT = {'monto_total'}
+CAMPOS_FLOAT = {'monto_total', 'tipo_cambio'}
 # autopack_ok no va en CAMPOS: solo lo escribe la ruta del tilde, que exige la clave
 # de Autopack (ver services/autopack.py). Así editar una solicitud no lo pisa.
 CAMPOS_INT = set()
@@ -83,6 +86,10 @@ def _normalizar(datos):
         'empresa': empresas[0] if empresas else '',
         'marca': marcas[0] if marcas else '',
         'forma_pago': ','.join(formas_pago(datos.get('forma_pago'))),
+        'moneda': mon.normalizar(datos.get('moneda')),
+        # En pesos el tipo de cambio no aplica: no queda uno viejo si se pasó de USD a ARS.
+        'tipo_cambio': (mon.tipo_cambio(datos.get('tipo_cambio'))
+                        if mon.normalizar(datos.get('moneda')) == 'USD' else 0),
     }
 
 
@@ -113,6 +120,10 @@ def validar(datos):
         errores.append('Seleccioná al menos una marca')
     if float(datos.get('monto_total') or 0) <= 0:
         errores.append('El monto presupuesto final debe ser mayor a cero')
+    if str(datos.get('moneda') or 'ARS').strip().upper() not in mon.MONEDAS:
+        errores.append('Moneda inválida')
+    elif mon.normalizar(datos.get('moneda')) == 'USD' and mon.tipo_cambio(datos.get('tipo_cambio')) <= 0:
+        errores.append('En dólares hace falta el tipo de cambio (para comparar con los topes en pesos)')
     if 'OTRO' in marcas and not str(datos.get('marca_otro') or '').strip():
         errores.append('Indicá cuál es la marca en "Otro"')
     if datos.get('concepto') == 'otros' and not str(datos.get('concepto_otro') or '').strip():
@@ -208,6 +219,7 @@ def obtener(solicitud_id):
         # Las listas se devuelven parseadas (con fallback al escalar de solicitudes viejas).
         solicitud['empresas'] = lista_multi(solicitud, 'empresas', 'empresa')
         solicitud['marcas'] = lista_multi(solicitud, 'marcas', 'marca')
+        solicitud['monto_pesos'] = monto_pesos(solicitud)
         solicitud['items'] = [
             _fila_a_dict(r) for r in
             conn.execute('SELECT * FROM items WHERE solicitud_id = ? ORDER BY orden', (solicitud_id,))
@@ -337,10 +349,10 @@ def eliminar(solicitud_id, motivo, eliminado_por='', es_admin=False):
 
         conn.execute(
             'INSERT INTO eliminaciones (solicitud_id, proveedor_nombre, cuit, marca, empresa, '
-            'monto_total, estado, fecha_factura, factura_numero, solicitado_por, firmas, '
-            'motivo, eliminado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'monto_total, moneda, estado, fecha_factura, factura_numero, solicitado_por, firmas, '
+            'motivo, eliminado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             (s['id'], s['proveedor_nombre'], s['cuit'], s['marca'], s['empresa'],
-             s['monto_total'], s['estado'], s['fecha'], s['factura_numero'],
+             s['monto_total'], s['moneda'], s['estado'], s['fecha'], s['factura_numero'],
              s['solicitado_por'], firmas, motivo, str(eliminado_por or '').strip()),
         )
         conn.execute('DELETE FROM solicitudes WHERE id = ?', (solicitud_id,))
@@ -359,6 +371,12 @@ def listar_eliminaciones():
         conn.close()
 
 
+def monto_pesos(solicitud):
+    """Monto de la solicitud en pesos (en dólares, con su tipo de cambio): es lo que
+    se compara con los topes de los autorizantes."""
+    return mon.en_pesos(solicitud['monto_total'], solicitud['moneda'], solicitud['tipo_cambio'])
+
+
 def marcas_de(solicitud):
     """Lista de marcas de una solicitud, sea dict o fila (con fallback al escalar)."""
     return lista_multi(dict(solicitud) if not isinstance(solicitud, dict) else solicitud,
@@ -369,7 +387,7 @@ def autorizados_para(solicitud):
     """Autorizados habilitados para la(s) marca(s) de la solicitud, marcando quien excede
     su tope y quien ya firmó. Con varias marcas, solo quien las cubra todas."""
     listas = listas_habilitadas(marcas_de(solicitud))
-    monto = float(solicitud['monto_total'] or 0)
+    monto = monto_pesos(solicitud)
     ya_firmaron = {a['nombre'] for a in solicitud['autorizaciones']}
     conn = get_db()
     try:
@@ -417,6 +435,7 @@ def ids_avisar_a(solicitud):
 def candidatos_aviso(marcas, monto):
     """A quien se le puede mandar el aviso de un gasto: los habilitados para la(s)
     marca(s) que ademas pueden cerrarlo solos por monto (tope suficiente o sin limite).
+    El monto va en pesos (si el gasto es en dólares, ya convertido).
 
     Quien carga la solicitud elige de esta lista. Van primero los de la planilla de la
     marca y despues Multimarca, que es la que cubre todo.
@@ -471,7 +490,8 @@ def validar_avisar_a(datos):
         return [], ['Elegí al menos un autorizado para avisarle que tiene que firmar']
 
     marcas = lista_multi(datos, 'marcas', 'marca')
-    candidatos = {c['id']: c for c in candidatos_aviso(marcas, datos.get('monto_total'))}
+    pesos = mon.en_pesos(datos.get('monto_total'), datos.get('moneda'), datos.get('tipo_cambio'))
+    candidatos = {c['id']: c for c in candidatos_aviso(marcas, pesos)}
     errores = []
     for i in ids:
         c = candidatos.get(i)

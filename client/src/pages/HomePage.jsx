@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import PanelLote from '../components/PanelLote.jsx'
 import robot from '../assets/robot-id.png'
-import { EMPRESAS, LISTAS, fmtFechaHora, fmtMoney } from '../constants.js'
+import { EMPRESAS, LISTAS, fmtFechaHora, fmtImporte } from '../constants.js'
 import {
   cerrarSesionAutopack, iniciarSesionAutopack, listarAutorizados, listarSolicitudes,
   marcarAutopack, paraFirmar, sesionAutopack, urlZipLote,
@@ -177,7 +177,7 @@ export default function HomePage() {
                         {' · '}{(s.marcas || []).length > 1 ? 'varias marcas' : (s.marca === 'OTRO' ? s.marca_otro : s.marca)}
                       </span>
                     </span>
-                    <span className="para-firmar-item__monto">$ {fmtMoney(s.monto_total)}</span>
+                    <span className="para-firmar-item__monto">{fmtImporte(s.monto_total, s.moneda)}</span>
                     {s.requiere_segunda_firma && (
                       <span className="badge badge--warning">falta 2ª firma</span>
                     )}
@@ -321,7 +321,7 @@ export default function HomePage() {
                         return n > 1 ? <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}> +{n - 1}</span> : null
                       })()}
                     </td>
-                    <td className="num">$ {fmtMoney(s.monto_total)}</td>
+                    <td className="num">{fmtImporte(s.monto_total, s.moneda)}</td>
                     <td>
                       <span className={`badge ${s.estado === 'autorizada' ? 'badge--success' : 'badge--muted'}`}>
                         {s.firmas} {s.firmas === 1 ? 'firma' : 'firmas'}

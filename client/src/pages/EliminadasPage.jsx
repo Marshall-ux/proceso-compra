@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fmtFechaHora, fmtMoney } from '../constants.js'
+import { fmtFechaHora, fmtImporte } from '../constants.js'
 import { listarEliminaciones } from '../services/api.js'
 
 // Historial de solicitudes eliminadas: qué se borró, por qué, quién y cuándo.
@@ -59,7 +59,7 @@ export default function EliminadasPage() {
                       )}
                     </td>
                     <td>{r.marca}</td>
-                    <td className="num">$ {fmtMoney(r.monto_total)}</td>
+                    <td className="num">{fmtImporte(r.monto_total, r.moneda)}</td>
                     <td>
                       {r.estado === 'autorizada'
                         ? <span className="badge badge--success">Autorizada · {r.firmas}/2</span>
