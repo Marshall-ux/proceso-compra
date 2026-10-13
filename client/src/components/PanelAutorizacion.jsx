@@ -19,6 +19,16 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
   const requiere2 = solicitud.requiere_segunda_firma
   const primerUso = elegido && !elegido.tiene_pin
 
+  // El PIN es solo numérico: si se tipea otra cosa (letras, o el teclado numérico con
+  // Bloq Num apagado) se descarta, pero avisando para que no parezca que el campo no anda.
+  const soloDigitos = (setter) => (e) => {
+    const valor = e.target.value
+    const digitos = valor.replace(/\D/g, '')
+    if (digitos !== valor) setError('El PIN lleva solo números. Si usás el teclado numérico, revisá que esté activado Bloq Num.')
+    else if (error.startsWith('El PIN lleva solo números')) setError('')
+    setter(digitos)
+  }
+
   const limpiar = () => {
     setElegido(null); setPin(''); setCodigo(''); setPinNuevo(''); setPinRepetido(''); setError('')
   }
@@ -130,7 +140,7 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
             <strong>$ {fmtMoney(solicitud.monto_total)}</strong>:
           </div>
 
-          {error && <div className="alert alert--error">{error}</div>}
+          {error && !elegido && <div className="alert alert--error">{error}</div>}
 
           <div className="autorizados-lista">
             {disponibles.map((a) => (
@@ -170,6 +180,7 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
 
           {elegido && (
             <div style={{ marginTop: '1.2rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+              {error && <div className="alert alert--error">{error}</div>}
               {elegido.excede_tope && (
                 <div className="alert alert--warning">
                   El monto supera el tope de {elegido.nombre} ($ {fmtMoney(elegido.monto_autorizado)}).
@@ -197,14 +208,14 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
                       <label>PIN nuevo</label>
                       <input
                         className="pin-input" type="password" inputMode="numeric" maxLength={8}
-                        value={pinNuevo} onChange={(e) => setPinNuevo(e.target.value.replace(/\D/g, ''))}
+                        value={pinNuevo} onChange={soloDigitos(setPinNuevo)}
                       />
                     </div>
                     <div className="field">
                       <label>Repetir PIN</label>
                       <input
                         className="pin-input" type="password" inputMode="numeric" maxLength={8}
-                        value={pinRepetido} onChange={(e) => setPinRepetido(e.target.value.replace(/\D/g, ''))}
+                        value={pinRepetido} onChange={soloDigitos(setPinRepetido)}
                       />
                     </div>
                   </div>
@@ -222,7 +233,7 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
                     <input
                       className="pin-input" type="password" inputMode="numeric" maxLength={8}
                       autoFocus value={pin}
-                      onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+                      onChange={soloDigitos(setPin)}
                       onKeyDown={(e) => e.key === 'Enter' && firmar()}
                     />
                   </div>
