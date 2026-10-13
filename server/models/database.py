@@ -195,6 +195,10 @@ _COLUMNAS_V2 = {
     'cajeras_notificado_at': 'TEXT',
     # A quien le llega el aviso de gasto nuevo: lo elige quien carga la solicitud.
     'avisar_a': "TEXT NOT NULL DEFAULT ''",
+    # Quién cambió el tipo de orden (abierta/cerrada) y cuándo: solo los habilitados
+    # en services/ordenes_abiertas.py, con su PIN.
+    'tipo_orden_por': "TEXT NOT NULL DEFAULT ''",
+    'tipo_orden_fecha': 'TEXT',
 }
 
 
