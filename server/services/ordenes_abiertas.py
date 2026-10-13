@@ -47,6 +47,7 @@ def similares(conn, cuit, marcas, concepto, excluir_id=None):
             'fecha': s['fecha'],
             'duracion_orden': s['duracion_orden'],
             'monto_total': s['monto_total'],
+            'moneda': s['moneda'],
             'estado': s['estado'],
             'created_at': s['created_at'],
         })

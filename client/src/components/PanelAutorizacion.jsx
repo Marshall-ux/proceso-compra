@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LISTAS, fmtFechaHora, fmtMoney } from '../constants.js'
+import { LISTAS, fmtFechaHora, fmtImporte, fmtMoney } from '../constants.js'
 import { autorizar, definirPin, quitarAutorizacion } from '../services/api.js'
 
 // Panel de firmas: el proceso exige DOS autorizantes distintos.
@@ -127,7 +127,8 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
         <>
           <div className="card__hint" style={{ marginBottom: '0.7rem' }}>
             Autorizados habilitados para <strong>{solicitud.marca}</strong> por un monto de{' '}
-            <strong>$ {fmtMoney(solicitud.monto_total)}</strong>:
+            <strong>{fmtImporte(solicitud.monto_total, solicitud.moneda)}</strong>
+            {solicitud.moneda === 'USD' && <> (equivale a <strong>$ {fmtMoney(solicitud.monto_pesos)}</strong>)</>}:
           </div>
 
           {error && <div className="alert alert--error">{error}</div>}

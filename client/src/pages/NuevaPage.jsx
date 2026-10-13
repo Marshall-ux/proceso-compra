@@ -2,12 +2,13 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FormularioSolicitud from '../components/FormularioSolicitud.jsx'
 import SelectorAvisados from '../components/SelectorAvisados.jsx'
-import { CONCEPTOS, fmtFechaHora, fmtMoney } from '../constants.js'
+import { CONCEPTOS, fmtFechaHora, fmtImporte, montoEnPesos } from '../constants.js'
 import { abiertasSimilares, crearSolicitud, extraerFacturas } from '../services/api.js'
 
 const VACIA = {
   fecha: '', empresa: '', marca: '', empresas: [], marcas: [], marca_otro: '',
   proveedor_tipo: '', proveedor_nombre: '',
+  moneda: 'ARS', tipo_cambio: '',
   cuit: '', tipo_orden: '', duracion_orden: '', concepto: '', concepto_otro: '', monto_total: '',
   forma_pago: '', cbu: '', condicion_pago: '', condicion_dias: '', condicion_otras: '',
   contacto_nombre: '', contacto_telefono: '', contacto_mail: '', observaciones: '',
@@ -87,7 +88,7 @@ export default function NuevaPage() {
     navigate(`/solicitudes/${orden.id}`, {
       state: orden.estado === 'autorizada'
         ? { pagoInicial: {
-            facturas: datos.facturas, monto: datos.monto_total || '',
+            facturas: datos.facturas, monto: datos.monto_total || '', tipo_cambio: datos.tipo_cambio || '',
             fecha: datos.fecha || '', cargado_por: datos.solicitado_por || '',
           } }
         : { avisoDuplicada: true },
@@ -172,7 +173,8 @@ export default function NuevaPage() {
           <FormularioSolicitud datos={datos} onChange={setDatos} autocompletados={autocompletados} />
 
           <SelectorAvisados
-            marcas={datos.marcas} monto={datos.monto_total} valores={datos.avisar_a}
+            marcas={datos.marcas} valores={datos.avisar_a}
+            monto={montoEnPesos(datos.monto_total, datos.moneda, datos.tipo_cambio)}
             onChange={(avisar_a) => setDatos((d) => ({ ...d, avisar_a }))}
           />
 
@@ -200,7 +202,7 @@ export default function NuevaPage() {
                 <strong>#{o.id} · {o.proveedor_nombre}</strong> (CUIT {o.cuit})
                 <div>
                   {o.marcas.join(', ')} · {CONCEPTOS.find((c) => c.valor === o.concepto)?.etiqueta || o.concepto}
-                  {' '}· $ {fmtMoney(o.monto_total)}
+                  {' '}· {fmtImporte(o.monto_total, o.moneda)}
                 </div>
                 <div>
                   Cargada el {fmtFechaHora(o.created_at)}{o.duracion_orden && <> · duración {o.duracion_orden}</>}

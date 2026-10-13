@@ -53,6 +53,22 @@ export const REQUIERE_OC = [
   { valor: 'no', etiqueta: 'No' },
 ]
 
+export const MONEDAS = [
+  { valor: 'ARS', etiqueta: 'Pesos ($)' },
+  { valor: 'USD', etiqueta: 'Dólares (U$S)' },
+]
+
+// Las solicitudes viejas no tienen moneda: son en pesos.
+export const simboloMoneda = (moneda) => (moneda === 'USD' ? 'U$S' : '$')
+
+// 1234.5, 'USD' -> 'U$S 1.234,50'
+export const fmtImporte = (v, moneda) => `${simboloMoneda(moneda)} ${fmtMoney(v)}`
+
+// Equivalente en pesos (los topes de los autorizantes están en pesos). En dólares sin
+// tipo de cambio da 0: todavía no se puede comparar.
+export const montoEnPesos = (monto, moneda, tipoCambio) =>
+  (Number(monto) || 0) * (moneda === 'USD' ? (Number(tipoCambio) || 0) : 1)
+
 // El formulario tiene 6 renglones en el detalle.
 export const MAX_ITEMS = 6
 

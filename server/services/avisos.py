@@ -30,7 +30,7 @@ import os
 from mail_neostar import APP_COLOR, APP_NOMBRE, base_url, enviar_mail, mail_layout
 from models.database import get_db
 from services.marcas import CONCEPTOS
-from services.pdf_fill import fmt_money
+from services.pdf_fill import fmt_equivalente, fmt_importe
 from services.solicitudes import ids_avisar_a, marcas_de
 
 log = logging.getLogger(__name__)
@@ -178,7 +178,8 @@ def _resumen(solicitud):
         ('Solicitud', f'#{solicitud["id"]}'),
         ('Proveedor', solicitud.get('proveedor_nombre')),
         ('CUIT', solicitud.get('cuit')),
-        ('Monto', f'$ {fmt_money(solicitud.get("monto_total"))}'),
+        ('Monto', fmt_importe(solicitud.get('monto_total'), solicitud.get('moneda'))
+         + (f' ({fmt_equivalente(solicitud)})' if fmt_equivalente(solicitud) else '')),
         ('Empresa', ', '.join(solicitud.get('empresas') or [])),
         ('Marca', ', '.join(marcas_de(solicitud))),
         ('Concepto', solicitud.get('concepto_otro')
@@ -223,7 +224,7 @@ def notificar_gasto_a_autorizar(solicitud, request=None):
 
     link = _link(solicitud['id'], request)
     proveedor = solicitud.get('proveedor_nombre') or 'sin proveedor'
-    monto = fmt_money(solicitud.get('monto_total'))
+    monto = fmt_importe(solicitud.get('monto_total'), solicitud.get('moneda'))
     resumen_txt, resumen_html = _resumen(solicitud)
 
     texto = (
@@ -245,7 +246,7 @@ def notificar_gasto_a_autorizar(solicitud, request=None):
         + _boton('Ver y autorizar', link, 'Se firma dentro de la app, con tu PIN. ')
     )
     return _enviar_a_cada_uno(
-        destinos, f'Gasto para autorizar: {proveedor} - $ {monto}',
+        destinos, f'Gasto para autorizar: {proveedor} - {monto}',
         texto, mail_layout('Gasto para autorizar', cuerpo), 'gasto a autorizar')
 
 
@@ -268,7 +269,7 @@ def notificar_autorizada(solicitud, request=None):
 
     link = _link(solicitud['id'], request)
     proveedor = solicitud.get('proveedor_nombre') or 'sin proveedor'
-    monto = fmt_money(solicitud.get('monto_total'))
+    monto = fmt_importe(solicitud.get('monto_total'), solicitud.get('moneda'))
     resumen_txt, resumen_html = _resumen(solicitud)
     firmantes = ', '.join(a['nombre'] for a in (solicitud.get('autorizaciones') or []))
 
@@ -291,5 +292,5 @@ def notificar_autorizada(solicitud, request=None):
         + _boton('Ver la autorización', link)
     )
     return _enviar_a_cada_uno(
-        destinos, f'Factura autorizada: {proveedor} - $ {monto}',
+        destinos, f'Factura autorizada: {proveedor} - {monto}',
         texto, mail_layout('Factura autorizada', cuerpo), 'factura autorizada')

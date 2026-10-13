@@ -44,7 +44,8 @@ export default function SelectorAvisados({ marcas, monto, valores = [], onChange
       </div>
       {!(marcas || []).length || !(Number(monto) > 0) ? (
         <div className="field__nota">
-          Elegí la marca y cargá el monto para ver quién puede autorizar este gasto.
+          Elegí la marca y cargá el monto (en dólares, también el tipo de cambio) para ver
+          quién puede autorizar este gasto.
         </div>
       ) : cargando && candidatos.length === 0 ? (
         <div className="field__nota"><span className="spinner spinner--dark" /> Buscando autorizados…</div>

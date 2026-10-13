@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { LISTAS, fmtFechaHora, fmtMoney } from '../constants.js'
+import { LISTAS, fmtFechaHora, fmtImporte, fmtMoney, montoEnPesos } from '../constants.js'
 import {
   crearPago, eliminarPago, extraerFacturas, firmarPago, urlFactura,
 } from '../services/api.js'
@@ -21,9 +21,12 @@ export default function SeccionPagos({ solicitud, onActualizar, pagoInicial }) {
   const pagos = solicitud.pagos || []
   const r = solicitud.pagos_resumen || {}
   const disponibles = solicitud.autorizados_disponibles || []
+  // Los pagos van en la moneda de la AGC; en dólares cada uno lleva su tipo de cambio.
+  const moneda = solicitud.moneda || 'ARS'
+  const usd = moneda === 'USD'
 
   function vacio() {
-    return { descripcion: '', monto: '', fecha: '', cargado_por: '', facturas: [] }
+    return { descripcion: '', monto: '', tipo_cambio: '', fecha: '', cargado_por: '', facturas: [] }
   }
 
   const subirFacturas = async (fileList) => {
@@ -50,11 +53,13 @@ export default function SeccionPagos({ solicitud, onActualizar, pagoInicial }) {
     setError('')
     if (!nuevo.descripcion.trim()) return setError('Poné una descripción (ej: "avance 20%").')
     if (!(Number(nuevo.monto) > 0)) return setError('El monto debe ser mayor a cero.')
+    if (usd && !(Number(nuevo.tipo_cambio) > 0)) return setError('Indicá el tipo de cambio del pago.')
     setGuardando(true)
     try {
       const s = await crearPago(solicitud.id, {
         descripcion: nuevo.descripcion.trim(),
         monto: Number(nuevo.monto),
+        tipo_cambio: usd ? Number(nuevo.tipo_cambio) : 0,
         fecha: nuevo.fecha.trim(),
         cargado_por: nuevo.cargado_por.trim(),
         facturas: nuevo.facturas,
@@ -105,19 +110,19 @@ export default function SeccionPagos({ solicitud, onActualizar, pagoInicial }) {
 
       {/* Resumen presupuesto vs imputado */}
       <div className="pagos-resumen">
-        <div><span className="pagos-resumen__lab">Presupuesto</span><strong>$ {fmtMoney(r.presupuesto)}</strong></div>
-        <div><span className="pagos-resumen__lab">Imputado</span><strong>$ {fmtMoney(r.imputado)}</strong></div>
+        <div><span className="pagos-resumen__lab">Presupuesto</span><strong>{fmtImporte(r.presupuesto, moneda)}</strong></div>
+        <div><span className="pagos-resumen__lab">Imputado</span><strong>{fmtImporte(r.imputado, moneda)}</strong></div>
         {!r.abierta && (
           <div><span className="pagos-resumen__lab">Saldo</span>
-            <strong style={{ color: r.saldo < 0 ? 'var(--danger)' : 'var(--text)' }}>$ {fmtMoney(r.saldo)}</strong>
+            <strong style={{ color: r.saldo < 0 ? 'var(--danger)' : 'var(--text)' }}>{fmtImporte(r.saldo, moneda)}</strong>
           </div>
         )}
         {r.abierta && <div className="badge badge--info">Orden abierta (tarifario de referencia)</div>}
       </div>
       {r.excede && (
         <div className="alert alert--warning">
-          Lo imputado (${fmtMoney(r.imputado)}) <strong>supera el presupuesto</strong> de la AGC
-          (${fmtMoney(r.presupuesto)}). Revisalo.
+          Lo imputado ({fmtImporte(r.imputado, moneda)}) <strong>supera el presupuesto</strong> de la AGC
+          ({fmtImporte(r.presupuesto, moneda)}). Revisalo.
         </div>
       )}
 
@@ -146,7 +151,8 @@ export default function SeccionPagos({ solicitud, onActualizar, pagoInicial }) {
                     </div>
                   </div>
                   <div className="pago__monto">
-                    $ {fmtMoney(p.monto)}
+                    {fmtImporte(p.monto, moneda)}
+                    {usd && <div className="pago__fecha">TC {fmtMoney(p.tipo_cambio)}</div>}
                     <div>
                       {conforme
                         ? <span className="badge badge--success">Conforme</span>
@@ -229,17 +235,29 @@ export default function SeccionPagos({ solicitud, onActualizar, pagoInicial }) {
             <input ref={inputRef} type="file" accept="application/pdf" multiple
                    style={{ display: 'none' }} onChange={(e) => subirFacturas(e.target.files)} />
           </div>
-          <div className="grid grid--3">
+          <div className={`grid ${usd ? 'grid--2' : 'grid--3'}`}>
             <div className="field">
               <label>Descripción</label>
               <input type="text" placeholder='Ej: "avance 20%"' value={nuevo.descripcion}
                      onChange={(e) => setNuevo({ ...nuevo, descripcion: e.target.value })} />
             </div>
             <div className="field">
-              <label>Monto</label>
+              <label>Monto{usd ? ' en dólares' : ''}</label>
               <input type="number" step="0.01" value={nuevo.monto}
                      onChange={(e) => setNuevo({ ...nuevo, monto: e.target.value })} />
             </div>
+            {usd && (
+              <div className="field">
+                <label>Tipo de cambio del pago</label>
+                <input type="number" step="0.01" placeholder="Ej: 1050" value={nuevo.tipo_cambio}
+                       onChange={(e) => setNuevo({ ...nuevo, tipo_cambio: e.target.value })} />
+                {montoEnPesos(nuevo.monto, 'USD', nuevo.tipo_cambio) > 0 && (
+                  <div className="field__nota">
+                    Equivale a $ {fmtMoney(montoEnPesos(nuevo.monto, 'USD', nuevo.tipo_cambio))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="field">
               <label>Fecha</label>
               <input type="text" placeholder="dd/mm/aaaa" value={nuevo.fecha}

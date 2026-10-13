@@ -1,7 +1,7 @@
-import { MAX_ITEMS, fmtMoney } from '../constants.js'
+import { MAX_ITEMS, fmtImporte, fmtMoney } from '../constants.js'
 
 // Detalle del servicio o producto. El total de cada renglon se recalcula solo.
-export default function ItemsEditor({ items, onChange }) {
+export default function ItemsEditor({ items, onChange, moneda }) {
   const actualizar = (i, campo, valor) => {
     const copia = items.map((it, idx) => {
       if (idx !== i) return it
@@ -83,7 +83,7 @@ export default function ItemsEditor({ items, onChange }) {
       </div>
       <div className="toolbar" style={{ marginTop: '0.9rem', marginBottom: 0 }}>
         <button type="button" className="btn btn--ghost btn--sm" onClick={agregar}>+ Agregar renglón</button>
-        <span className="toolbar__info">Suma de renglones: <strong>$ {fmtMoney(suma)}</strong></span>
+        <span className="toolbar__info">Suma de renglones: <strong>{fmtImporte(suma, moneda)}</strong></span>
       </div>
     </>
   )

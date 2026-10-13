@@ -10,8 +10,9 @@ import re
 import unicodedata
 import zipfile
 
+from services import moneda as mon
 from services.marcas import CONCEPTOS
-from services.pdf_fill import fmt_fecha_hora, fmt_money, generar_pdf
+from services.pdf_fill import fmt_equivalente, fmt_fecha_hora, fmt_importe, fmt_money, generar_pdf
 
 UPLOADS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
 GENERADOS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'generated')
@@ -59,6 +60,7 @@ def _resumen(solicitud):
     criticidad = CRITICIDADES.get(solicitud.get('criticidad'), solicitud.get('criticidad') or '-')
     if solicitud.get('criticidad') == 'otro' and solicitud.get('criticidad_obs'):
         criticidad += f' ({solicitud["criticidad_obs"]})'
+    moneda = mon.normalizar(solicitud.get('moneda'))
 
     lineas = [
         f'SOLICITUD #{solicitud["id"]} - {estado}',
@@ -73,7 +75,8 @@ def _resumen(solicitud):
         f'Criticidad          : {criticidad}',
         f'Requiere OC         : {(solicitud.get("requiere_oc") or "-").upper()}',
         f'Cargado en Autopack : {_autopack(solicitud)}',
-        f'MONTO TOTAL         : $ {fmt_money(solicitud.get("monto_total"))}',
+        f'MONTO TOTAL         : {fmt_importe(solicitud.get("monto_total"), moneda)}'
+        + (f'  ({fmt_equivalente(solicitud)})' if fmt_equivalente(solicitud) else ''),
         f'Solicitado por      : {solicitud.get("solicitado_por") or "-"}',
         '',
         'DETALLE',
@@ -95,13 +98,15 @@ def _resumen(solicitud):
     if solicitud.get('pagos'):
         res = solicitud.get('pagos_resumen') or {}
         lineas += ['', 'PAGOS IMPUTADOS', '-' * 60,
-                   f'  Presupuesto: $ {fmt_money(res.get("presupuesto"))}  |  '
-                   f'Imputado: $ {fmt_money(res.get("imputado"))}'
-                   + ('' if res.get('abierta') else f'  |  Saldo: $ {fmt_money(res.get("saldo"))}')]
+                   f'  Presupuesto: {fmt_importe(res.get("presupuesto"), moneda)}  |  '
+                   f'Imputado: {fmt_importe(res.get("imputado"), moneda)}'
+                   + ('' if res.get('abierta') else f'  |  Saldo: {fmt_importe(res.get("saldo"), moneda)}')]
         for p in solicitud['pagos']:
             estado = 'CONFORME' if p.get('estado') == 'conforme' else 'pendiente'
             firmas = ', '.join(f.get('nombre', '') for f in p.get('firmas', [])) or 'sin firmas'
-            lineas.append(f'  [{estado}] {p.get("descripcion", "")} - $ {fmt_money(p.get("monto"))}'
+            tc = f' (TC {fmt_money(p.get("tipo_cambio"))})' if moneda == 'USD' else ''
+            lineas.append(f'  [{estado}] {p.get("descripcion", "")} - '
+                          f'{fmt_importe(p.get("monto"), moneda)}{tc}'
                           f' - {p.get("fecha") or "-"} - conformidad: {firmas}')
 
     lineas += ['', 'ARCHIVOS ADJUNTOS', '-' * 60]
