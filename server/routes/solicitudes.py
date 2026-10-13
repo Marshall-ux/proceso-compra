@@ -7,6 +7,7 @@ from flask import Blueprint, jsonify, request, send_file
 from models.database import get_db
 from services import autopack
 from services import avisos
+from services import ordenes_abiertas
 from services import pagos
 from services import solicitudes as svc
 from services.admin import verificar_admin
@@ -32,9 +33,15 @@ UPLOADS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
 
 
 def _con_disponibles(solicitud):
-    """Agrega la lista de autorizados habilitados (para los selectores de firma)."""
+    """Agrega la lista de autorizados habilitados (para los selectores de firma) y
+    quiénes pueden cambiar el tipo de orden."""
     if solicitud:
         solicitud['autorizados_disponibles'] = svc.autorizados_para(solicitud)
+        conn = get_db()
+        try:
+            solicitud['habilitados_tipo_orden'] = ordenes_abiertas.habilitados(conn)
+        finally:
+            conn.close()
     return solicitud
 
 
@@ -53,6 +60,46 @@ def para_firmar():
     except (TypeError, ValueError):
         return jsonify([])
     return jsonify(svc.para_firmar(autorizado_id))
+
+
+@bp.route('/solicitudes/abiertas-similares', methods=['GET'])
+def abiertas_similares():
+    """Órdenes abiertas del mismo CUIT, marca y concepto: la pantalla de alta pregunta
+    si la factura nueva es de alguna de ellas antes de crear otra solicitud."""
+    conn = get_db()
+    try:
+        return jsonify(ordenes_abiertas.similares(
+            conn, request.args.get('cuit'), request.args.getlist('marca'),
+            request.args.get('concepto')))
+    finally:
+        conn.close()
+
+
+@bp.route('/solicitudes/<int:solicitud_id>/tipo-orden', methods=['POST'])
+def cambiar_tipo_orden(solicitud_id):
+    """Pasa una solicitud pendiente a orden abierta o cerrada. Solo los habilitados
+    (ver services/ordenes_abiertas.py), con su PIN; queda registrado quién y cuándo."""
+    data = request.get_json(silent=True) or {}
+    solicitud = svc.obtener(solicitud_id)
+    if not solicitud:
+        return jsonify({'error': 'La solicitud no existe'}), 404
+
+    conn = get_db()
+    try:
+        try:
+            autorizado = verificar_autorizante(conn, data.get('autorizado_id'),
+                                               str(data.get('pin') or ''), solicitud_id)
+        except ErrorAutorizante as e:
+            return jsonify({'error': e.mensaje, **e.extra}), e.codigo
+        ok, error = ordenes_abiertas.cambiar_tipo(
+            conn, solicitud, autorizado, data.get('tipo_orden'), data.get('duracion_orden'))
+        if not ok:
+            conn.commit()   # el PIN correcto ya reseteó los intentos fallidos
+            return jsonify({'error': error}), 400
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify(_con_disponibles(svc.obtener(solicitud_id)))
 
 
 @bp.route('/solicitudes', methods=['POST'])
@@ -75,8 +122,7 @@ def obtener(solicitud_id):
     solicitud = svc.obtener(solicitud_id)
     if not solicitud:
         return jsonify({'error': 'La solicitud no existe'}), 404
-    solicitud['autorizados_disponibles'] = svc.autorizados_para(solicitud)
-    return jsonify(solicitud)
+    return jsonify(_con_disponibles(solicitud))
 
 
 @bp.route('/solicitudes/<int:solicitud_id>', methods=['PUT'])
@@ -148,7 +194,7 @@ def autorizar(solicitud_id):
     resultado = svc.obtener(solicitud_id)
     # Si esta firma completo la autorizacion, administracion ya puede pagarla.
     _avisar(avisos.notificar_autorizada, resultado)
-    resultado['autorizados_disponibles'] = svc.autorizados_para(resultado)
+    _con_disponibles(resultado)
     resultado['aviso_tope'] = (
         f'{nombre} autorizó un monto que supera su tope de '
         f'$ {fmt_money(tope)}. Queda registrado en el PDF.' if excedio else ''
@@ -320,7 +366,7 @@ def quitar_autorizacion(solicitud_id, autorizacion_id):
     finally:
         conn.close()
     resultado = svc.obtener(solicitud_id)
-    resultado['autorizados_disponibles'] = svc.autorizados_para(resultado)
+    _con_disponibles(resultado)
     return jsonify(resultado)
 
 

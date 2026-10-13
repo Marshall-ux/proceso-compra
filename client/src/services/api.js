@@ -76,6 +76,23 @@ export const obtenerSolicitud = (id) => pedir(`/solicitudes/${id}`)
 export const paraFirmar = (autorizadoId) =>
   pedir(`/solicitudes/para-firmar?autorizado_id=${autorizadoId}`)
 
+// Órdenes abiertas del mismo CUIT, marca y concepto (para no duplicar una al cargar).
+export const abiertasSimilares = (cuit, marcas, concepto) => {
+  const qs = new URLSearchParams()
+  qs.set('cuit', cuit || '')
+  for (const m of marcas || []) qs.append('marca', m)
+  qs.set('concepto', concepto || '')
+  return pedir(`/solicitudes/abiertas-similares?${qs}`)
+}
+
+// Pasar una pendiente a orden abierta/cerrada: solo los habilitados, con su PIN.
+export const cambiarTipoOrden = (id, payload) =>
+  pedir(`/solicitudes/${id}/tipo-orden`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
 export const crearSolicitud = (datos) =>
   pedir('/solicitudes', {
     method: 'POST',

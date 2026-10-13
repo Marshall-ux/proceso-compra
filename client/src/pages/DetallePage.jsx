@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import CambioTipoOrden from '../components/CambioTipoOrden.jsx'
 import FormularioSolicitud from '../components/FormularioSolicitud.jsx'
 import PanelAutorizacion from '../components/PanelAutorizacion.jsx'
 import SeccionPagos from '../components/SeccionPagos.jsx'
@@ -12,6 +13,9 @@ import {
 export default function DetallePage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
+  // Viene del alta, cuando la factura resultó ser de esta orden abierta (ver NuevaPage).
+  const [desdeAlta] = useState(() => location.state || {})
   const [solicitud, setSolicitud] = useState(null)
   const [borrador, setBorrador] = useState(null)
   const [editando, setEditando] = useState(false)
@@ -34,6 +38,11 @@ export default function DetallePage() {
   }, [id])
 
   useEffect(() => { cargar() }, [cargar])
+
+  // El estado de navegación se consume una vez: recargar la página no reabre el pago.
+  useEffect(() => {
+    if (location.state) navigate(location.pathname, { replace: true, state: null })
+  }, [location, navigate])
 
   if (error) return <div className="alert alert--error">{error}</div>
   if (!solicitud) return <div className="empty"><span className="spinner spinner--dark" /> Cargando…</div>
@@ -138,9 +147,27 @@ export default function DetallePage() {
         </div>
       </div>
 
+      {desdeAlta.pagoInicial && (
+        <div className="alert alert--info">
+          La factura que estabas cargando quedó lista como pago de esta orden abierta:
+          completá la descripción y agregala abajo, en "Pagos imputados".
+        </div>
+      )}
+      {desdeAlta.avisoDuplicada && (
+        <div className="alert alert--warning">
+          Esta orden abierta todavía está pendiente de firma. Cuando quede autorizada,
+          sumale la factura como pago desde esta pantalla, sin crear una solicitud nueva.
+        </div>
+      )}
+
       <PanelAutorizacion solicitud={solicitud} onActualizar={setSolicitud} />
 
-      {completa && <SeccionPagos solicitud={solicitud} onActualizar={setSolicitud} />}
+      {!completa && <CambioTipoOrden solicitud={solicitud} onActualizar={setSolicitud} />}
+
+      {completa && (
+        <SeccionPagos solicitud={solicitud} onActualizar={setSolicitud}
+                      pagoInicial={desdeAlta.pagoInicial} />
+      )}
 
       <div className="card">
         <div className="toolbar" style={{ marginBottom: editando ? '1.2rem' : 0 }}>
