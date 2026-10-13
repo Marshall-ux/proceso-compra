@@ -43,6 +43,10 @@ _RE_FECHA = re.compile(r'\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b')
 _RE_NUMERO = re.compile(r'(?:N[º°ro\.]*\s*)?(\d{4}-\d{8})\b')
 _RE_MAIL = re.compile(r'\b[\w.+-]+@[\w-]+\.[\w.-]+\b')
 _RE_CBU = re.compile(r'(?<!\d)(\d{22})(?!\d)')
+# Factura en dólares: el rótulo de moneda o el total con el símbolo. Un "USD" suelto en
+# la descripción de un renglón no alcanza.
+_RE_DOLARES = re.compile(r'moneda\s*:?\s*(?:usd|u\$s|dolar)|total\s*:?\s*(?:usd|u\$s)')
+_RE_TIPO_CAMBIO = re.compile(r'tipo\s+de\s+cambio\s*:?\s*\$?\s*([\d.,]+)')
 _RE_TEL = re.compile(r'(?:tel|telefono|tel\.|wsp|whatsapp|cel)[\s.:]*([\d\s()\-]{7,20})', re.I)
 _RE_IMPORTE = re.compile(r'\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2}|\d+\.\d{2}')
 
@@ -177,6 +181,15 @@ def _total(texto, lineas):
                 return parse_importe(importes[-1])
     importes = [parse_importe(i) for i in _RE_IMPORTE.findall(texto)]
     return max(importes) if importes else 0.0
+
+
+def _moneda(texto):
+    """('USD', tipo de cambio) si la factura es en dólares; ('', 0) si no."""
+    t = _norm(texto)
+    if not _RE_DOLARES.search(t):
+        return '', 0.0
+    tc = _RE_TIPO_CAMBIO.search(t)
+    return 'USD', parse_importe(tc.group(1)) if tc else 0.0
 
 
 def _items(lineas):
@@ -358,6 +371,14 @@ def extraer_datos_factura(path):
         items_arca, suma_final = _items_arca(path)
         if items_arca and abs(suma_final - total) <= 1:
             items = items_arca
+
+    # En dólares se marca la moneda (y el tipo de cambio si lo trae); si no, queda en
+    # pesos, que es el valor por defecto del formulario.
+    moneda, tipo_cambio = _moneda(texto)
+    if moneda:
+        datos['moneda'] = moneda
+        if tipo_cambio:
+            datos['tipo_cambio'] = tipo_cambio
 
     # Proveedor conocido por CUIT (nombre no legible en el texto): se resuelve solo.
     if datos['cuit'] in PROVEEDORES_CONOCIDOS:

@@ -2,11 +2,13 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FormularioSolicitud from '../components/FormularioSolicitud.jsx'
 import SelectorAvisados from '../components/SelectorAvisados.jsx'
-import { crearSolicitud, extraerFacturas } from '../services/api.js'
+import { CONCEPTOS, fmtFechaHora, fmtImporte, montoEnPesos } from '../constants.js'
+import { abiertasSimilares, crearSolicitud, extraerFacturas } from '../services/api.js'
 
 const VACIA = {
   fecha: '', empresa: '', marca: '', empresas: [], marcas: [], marca_otro: '',
   proveedor_tipo: '', proveedor_nombre: '',
+  moneda: 'ARS', tipo_cambio: '',
   cuit: '', tipo_orden: '', duracion_orden: '', concepto: '', concepto_otro: '', monto_total: '',
   forma_pago: '', cbu: '', condicion_pago: '', condicion_dias: '', condicion_otras: '',
   contacto_nombre: '', contacto_telefono: '', contacto_mail: '', observaciones: '',
@@ -27,6 +29,9 @@ export default function NuevaPage() {
   const [autocompletados, setAutocompletados] = useState([])
   const [aviso, setAviso] = useState('')
   const [errores, setErrores] = useState([])
+  // Órdenes abiertas del mismo CUIT, marca y concepto: se pregunta si es la misma
+  // antes de crear otra solicitud (lo que corresponde es sumarle la factura como pago).
+  const [similares, setSimilares] = useState([])
 
   const procesar = async (archivos) => {
     const lista = Array.from(archivos || []).filter((a) => a)
@@ -55,10 +60,18 @@ export default function NuevaPage() {
     }
   }
 
-  const guardar = async () => {
+  const guardar = async (esOtra = false) => {
     setGuardando(true)
     setErrores([])
     try {
+      if (!esOtra) {
+        const encontradas = await abiertasSimilares(datos.cuit, datos.marcas, datos.concepto)
+        if (encontradas.length > 0) {
+          setSimilares(encontradas)
+          return
+        }
+      }
+      setSimilares([])
       const creada = await crearSolicitud(datos)
       navigate(`/solicitudes/${creada.id}`)
     } catch (e) {
@@ -67,6 +80,19 @@ export default function NuevaPage() {
     } finally {
       setGuardando(false)
     }
+  }
+
+  // Es la misma orden: va a la existente con la factura lista para cargarla como pago.
+  // Si todavía no está autorizada no admite pagos: se la muestra y se avisa.
+  const usarExistente = (orden) => {
+    navigate(`/solicitudes/${orden.id}`, {
+      state: orden.estado === 'autorizada'
+        ? { pagoInicial: {
+            facturas: datos.facturas, monto: datos.monto_total || '', tipo_cambio: datos.tipo_cambio || '',
+            fecha: datos.fecha || '', cargado_por: datos.solicitado_por || '',
+          } }
+        : { avisoDuplicada: true },
+    })
   }
 
   const continuarSinFactura = () => {
@@ -147,15 +173,53 @@ export default function NuevaPage() {
           <FormularioSolicitud datos={datos} onChange={setDatos} autocompletados={autocompletados} />
 
           <SelectorAvisados
-            marcas={datos.marcas} monto={datos.monto_total} valores={datos.avisar_a}
+            marcas={datos.marcas} valores={datos.avisar_a}
+            monto={montoEnPesos(datos.monto_total, datos.moneda, datos.tipo_cambio)}
             onChange={(avisar_a) => setDatos((d) => ({ ...d, avisar_a }))}
           />
 
           <div className="toolbar" style={{ marginBottom: 0 }}>
             <button className="btn btn--ghost" onClick={() => setPaso(1)}>← Volver</button>
-            <button className="btn btn--primary" onClick={guardar} disabled={guardando}>
+            <button className="btn btn--primary" onClick={() => guardar()} disabled={guardando}>
               {guardando ? <><span className="spinner" /> Guardando…</> : 'Guardar y pasar a autorización →'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {similares.length > 0 && (
+        <div className="modal-fondo" onClick={() => setSimilares([])}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="card__title" style={{ marginBottom: '0.3rem' }}>
+              ⚠ Ya hay {similares.length === 1 ? 'una orden abierta' : `${similares.length} órdenes abiertas`} para este proveedor
+            </div>
+            <p className="card__hint">
+              Mismo CUIT, marca y concepto. Si esta factura es de esa orden, no hay que crear
+              una solicitud nueva: se agrega como pago a la orden existente.
+            </p>
+            {similares.map((o) => (
+              <div key={o.id} className="alert alert--info" style={{ display: 'block' }}>
+                <strong>#{o.id} · {o.proveedor_nombre}</strong> (CUIT {o.cuit})
+                <div>
+                  {o.marcas.join(', ')} · {CONCEPTOS.find((c) => c.valor === o.concepto)?.etiqueta || o.concepto}
+                  {' '}· {fmtImporte(o.monto_total, o.moneda)}
+                </div>
+                <div>
+                  Cargada el {fmtFechaHora(o.created_at)}{o.duracion_orden && <> · duración {o.duracion_orden}</>}
+                  {' '}· {o.estado === 'autorizada' ? 'autorizada' : 'pendiente de firma'}
+                </div>
+                <button className="btn btn--primary btn--sm" style={{ marginTop: '0.6rem' }}
+                        onClick={() => usarExistente(o)}>
+                  {o.estado === 'autorizada' ? `Sí, agregarla como pago a #${o.id}` : `Sí, es esta: ver #${o.id}`}
+                </button>
+              </div>
+            ))}
+            <div className="toolbar" style={{ marginBottom: 0, marginTop: '0.6rem' }}>
+              <button className="btn btn--ghost" onClick={() => setSimilares([])}>Volver al formulario</button>
+              <button className="btn btn--ghost" onClick={() => guardar(true)} disabled={guardando}>
+                No, es otra: crear solicitud nueva
+              </button>
+            </div>
           </div>
         </div>
       )}

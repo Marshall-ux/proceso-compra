@@ -195,6 +195,14 @@ _COLUMNAS_V2 = {
     'cajeras_notificado_at': 'TEXT',
     # A quien le llega el aviso de gasto nuevo: lo elige quien carga la solicitud.
     'avisar_a': "TEXT NOT NULL DEFAULT ''",
+    # Quién cambió el tipo de orden (abierta/cerrada) y cuándo: solo los habilitados
+    # en services/ordenes_abiertas.py, con su PIN.
+    'tipo_orden_por': "TEXT NOT NULL DEFAULT ''",
+    'tipo_orden_fecha': 'TEXT',
+    # Moneda (ARS | USD). En dólares, tipo_cambio es el que cargó quien subió la
+    # solicitud: con él se compara contra los topes, que están en pesos.
+    'moneda': "TEXT NOT NULL DEFAULT 'ARS'",
+    'tipo_cambio': 'REAL NOT NULL DEFAULT 0',
 }
 
 
@@ -221,11 +229,22 @@ _COLUMNAS_FACTURAS = {
     'pago_id': 'INTEGER',   # NULL = factura de la AGC; con valor = factura de un pago
 }
 
+# Un pago va en la moneda de su AGC; si es en dólares lleva su propio tipo de cambio
+# (se paga meses después de autorizada la orden).
+_COLUMNAS_PAGOS = {
+    'tipo_cambio': 'REAL NOT NULL DEFAULT 0',
+}
+
+_COLUMNAS_ELIMINACIONES = {
+    'moneda': "TEXT NOT NULL DEFAULT 'ARS'",
+}
+
 
 def _migrar(conn):
     """Agrega a una base preexistente las columnas nuevas que falten."""
     for tabla, columnas in (('solicitudes', _COLUMNAS_V2), ('autorizados', _COLUMNAS_AUTORIZADOS),
-                            ('facturas', _COLUMNAS_FACTURAS)):
+                            ('facturas', _COLUMNAS_FACTURAS), ('pagos', _COLUMNAS_PAGOS),
+                            ('eliminaciones', _COLUMNAS_ELIMINACIONES)):
         existentes = {r['name'] for r in conn.execute(f'PRAGMA table_info({tabla})')}
         for columna, definicion in columnas.items():
             if columna not in existentes:

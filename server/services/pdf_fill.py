@@ -17,6 +17,8 @@ from reportlab.lib.colors import HexColor, black
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
+from services import moneda as mon
+
 PLANTILLA = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets',
                          'formulario_f8401_rev07.pdf')
 
@@ -109,6 +111,9 @@ ZONA_DIAS_OTRO = (348.6, 202.5, 368.0, 214.0)
 # Delante de esa linea la hoja trae un glifo que la fuente dibuja como un cuadradito;
 # en el original lo tapaba el fondo del campo Text69, que al aplanar desaparece.
 TAPA_CUADRADITO_DIAS = (348.6, 205.3, 354.8, 214.0)
+# A la derecha del monto final (espacio libre del formulario): tipo de cambio y
+# equivalente en pesos cuando la solicitud es en dólares.
+ZONA_EQUIVALENTE = (414.0, 304.3, 534.0, 317.2)
 
 # Recuadros de firma del original (tampoco son campos).
 CAJA_SOLICITANTE = (54.4, 69.0, 293.7, 113.4)
@@ -123,6 +128,20 @@ def fmt_money(valor):
         return ''
     entero, dec = f'{v:,.2f}'.split('.')
     return f'{entero.replace(",", ".")},{dec}'
+
+
+def fmt_importe(valor, moneda='ARS'):
+    """1234.5, 'USD' -> 'U$S 1.234,50'"""
+    return f'{mon.simbolo(moneda)} {fmt_money(valor)}'
+
+
+def fmt_equivalente(solicitud):
+    """En dólares, el tipo de cambio y el equivalente en pesos ('TC 1.050,00 = $ ...').
+    En pesos, vacío."""
+    if mon.normalizar(solicitud.get('moneda')) != 'USD':
+        return ''
+    pesos = mon.en_pesos(solicitud.get('monto_total'), 'USD', solicitud.get('tipo_cambio'))
+    return f'TC {fmt_money(solicitud.get("tipo_cambio"))} = $ {fmt_money(pesos)}'
 
 
 def fmt_fecha_hora(valor):
@@ -351,17 +370,23 @@ def _completar_overlay(solicitud):
     if solicitud.get('concepto') == 'otros':
         ov.texto_en(ZONA_CONCEPTO_OTRO, solicitud.get('concepto_otro'), size=7)
 
+    # En pesos los renglones van sin símbolo, como siempre; en dólares se aclara.
+    moneda = mon.normalizar(solicitud.get('moneda'))
+    def renglon(valor):
+        return fmt_importe(valor, moneda) if moneda == 'USD' else fmt_money(valor)
+
     for i, (f_desc, f_precio, f_cant, f_total) in enumerate(FILAS_ITEMS):
         items = solicitud.get('items', [])
         if i >= len(items):
             break
         item = items[i]
         ov.campo(f_desc, item.get('descripcion'), size=7)
-        ov.campo(f_precio, fmt_money(item.get('precio')), size=7, alinear='der')
+        ov.campo(f_precio, renglon(item.get('precio')), size=7, alinear='der')
         ov.campo(f_cant, fmt_cant(item.get('cantidad')), size=7, alinear='centro')
-        ov.campo(f_total, fmt_money(item.get('total')), size=7, alinear='der')
+        ov.campo(f_total, renglon(item.get('total')), size=7, alinear='der')
 
-    ov.campo(CAMPO_MONTO_FINAL, '$ ' + fmt_money(solicitud.get('monto_total')), bold=True)
+    ov.campo(CAMPO_MONTO_FINAL, fmt_importe(solicitud.get('monto_total'), moneda), bold=True)
+    ov.texto_en(ZONA_EQUIVALENTE, fmt_equivalente(solicitud), size=6.5)
     ov.campo(CAMPO_CBU, solicitud.get('cbu'), size=7.5)
 
     x0, y0, x1, y1 = TAPA_CUADRADITO_DIAS

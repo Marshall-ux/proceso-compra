@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { LISTAS, fmtMoney } from '../constants.js'
+import { LISTAS, fmtMoney, montoEnPesos } from '../constants.js'
 import { autorizarLote, listarAutorizados } from '../services/api.js'
 
 // Firma varias solicitudes de una vez: el PIN se pide una sola vez, pero las reglas
@@ -16,7 +16,9 @@ export default function PanelLote({ solicitudes, onListo }) {
   useEffect(() => { listarAutorizados().then(setAutorizados) }, [])
 
   const persona = autorizados.find((a) => String(a.id) === String(elegido))
-  const total = solicitudes.reduce((acc, s) => acc + (Number(s.monto_total) || 0), 0)
+  // Puede haber solicitudes en dólares: el total se muestra en pesos.
+  const total = solicitudes.reduce((acc, s) => acc + montoEnPesos(s.monto_total, s.moneda, s.tipo_cambio), 0)
+  const hayDolares = solicitudes.some((s) => s.moneda === 'USD')
 
   const firmar = async () => {
     setError(''); setSalteadas([])
@@ -47,7 +49,7 @@ export default function PanelLote({ solicitudes, onListo }) {
         ✍️ Autorizar {solicitudes.length} solicitud(es) juntas
       </div>
       <div className="card__hint">
-        Total ${' '}{fmtMoney(total)}. Las que no correspondan a tu marca o ya hayas firmado
+        Total ${' '}{fmtMoney(total)}{hayDolares && ' (las de dólares, convertidas a pesos)'}. Las que no correspondan a tu marca o ya hayas firmado
         se saltean y te aviso cuáles.
       </div>
 

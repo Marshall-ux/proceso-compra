@@ -1,6 +1,6 @@
 import {
   CONCEPTOS, CONDICION_DIAS, CONDICION_PAGO, CRITICIDAD, EMPRESAS, FORMA_PAGO, MARCAS,
-  PROVEEDOR_TIPO, REQUIERE_OC, TIPO_ORDEN, fmtMoney,
+  MONEDAS, PROVEEDOR_TIPO, REQUIERE_OC, TIPO_ORDEN, fmtImporte, fmtMoney, montoEnPesos,
 } from '../constants.js'
 import { subirCbu, subirLegajo } from '../services/api.js'
 import AdjuntoUploader from './AdjuntoUploader.jsx'
@@ -25,6 +25,8 @@ export default function FormularioSolicitud({ datos, onChange, autocompletados =
 
   const suma = (datos.items || []).reduce((acc, it) => acc + (Number(it.total) || 0), 0)
   const difiere = Math.abs(suma - (Number(datos.monto_total) || 0)) > 0.5 && suma > 0
+  const moneda = datos.moneda || 'ARS'
+  const enPesos = montoEnPesos(datos.monto_total, moneda, datos.tipo_cambio)
 
   return (
     <>
@@ -145,10 +147,16 @@ export default function FormularioSolicitud({ datos, onChange, autocompletados =
             En el PDF entran los primeros 6; agrupá o resumí los ítems si hace falta que se vean todos.
           </div>
         )}
-        <ItemsEditor items={datos.items || []} onChange={set('items')} />
-        <div className="grid grid--2" style={{ marginTop: '1.1rem' }}>
+        <ItemsEditor items={datos.items || []} onChange={set('items')} moneda={moneda} />
+        <div style={{ marginTop: '1.1rem' }} className={auto('moneda')}>
+          <Opciones
+            nombre="moneda" valor={moneda} opciones={MONEDAS}
+            onChange={(m) => onChange({ ...datos, moneda: m, tipo_cambio: m === 'USD' ? datos.tipo_cambio : '' })}
+          />
+        </div>
+        <div className="grid grid--2" style={{ marginTop: '0.9rem' }}>
           <div className={auto('monto_total')}>
-            <label>Monto presupuesto final (IVA incluido)</label>
+            <label>Monto presupuesto final (IVA incluido){moneda === 'USD' ? ' en dólares' : ''}</label>
             <input
               type="number" step="0.01"
               value={datos.monto_total ?? ''}
@@ -156,10 +164,25 @@ export default function FormularioSolicitud({ datos, onChange, autocompletados =
             />
             {difiere && (
               <div className="field__nota" style={{ color: 'var(--warning)' }}>
-                Los renglones suman $ {fmtMoney(suma)}. Es normal si el monto final incluye IVA.
+                Los renglones suman {fmtImporte(suma, moneda)}. Es normal si el monto final incluye IVA.
               </div>
             )}
           </div>
+          {moneda === 'USD' && (
+            <div className={auto('tipo_cambio')}>
+              <label>Tipo de cambio (pesos por dólar)</label>
+              <input
+                type="number" step="0.01" placeholder="Ej: 1050"
+                value={datos.tipo_cambio || ''}
+                onChange={setInput('tipo_cambio')}
+              />
+              <div className="field__nota">
+                {enPesos > 0
+                  ? <>Equivale a <strong>$ {fmtMoney(enPesos)}</strong>. Con este monto se controla el tope de quien firma.</>
+                  : 'Hace falta para comparar con los topes de firma, que están en pesos.'}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

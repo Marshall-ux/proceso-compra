@@ -9,7 +9,7 @@ from services.marcas import listas_habilitadas
 from services.pins import (
     MAX_INTENTOS, esta_bloqueado, momento_desbloqueo, registrar_intento, verificar_pin,
 )
-from services.solicitudes import AUTORIZACIONES_REQUERIDAS, marcas_de
+from services.solicitudes import AUTORIZACIONES_REQUERIDAS, marcas_de, monto_pesos
 
 
 class ErrorAutorizante(Exception):
@@ -88,7 +88,8 @@ def firmar(conn, solicitud, autorizado):
         return False, f'{autorizado["nombre"]} ya autorizó esta solicitud', False
 
     tope = autorizado['monto_autorizado']
-    excedio = tope is not None and float(solicitud['monto_total'] or 0) > tope
+    # Los topes están en pesos: una solicitud en dólares se compara convertida.
+    excedio = tope is not None and monto_pesos(solicitud) > tope
 
     conn.execute(
         'INSERT INTO autorizaciones (solicitud_id, autorizado_id, excedio_tope, monto_tope) '

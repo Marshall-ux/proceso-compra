@@ -13,7 +13,7 @@ UPLOADS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
 # Campos de texto que se toman de la primera factura que los traiga.
 _CAMPOS_PRIMERO = (
     'fecha', 'empresa', 'proveedor_nombre', 'cuit', 'condicion_pago', 'condicion_dias',
-    'contacto_mail', 'contacto_telefono', 'cbu',
+    'contacto_mail', 'contacto_telefono', 'cbu', 'moneda', 'tipo_cambio',
 )
 
 

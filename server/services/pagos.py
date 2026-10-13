@@ -7,6 +7,7 @@ pago no supera el tope de quien firma; si lo supera, hace falta una 2a.
 """
 
 from models.database import get_db
+from services import moneda as mon
 from services.marcas import listas_habilitadas
 from services.solicitudes import AUTORIZACIONES_REQUERIDAS, marcas_de
 
@@ -27,17 +28,26 @@ def crear_pago(solicitud_id, datos, facturas):
 
     conn = get_db()
     try:
-        s = conn.execute('SELECT estado FROM solicitudes WHERE id = ?', (solicitud_id,)).fetchone()
+        s = conn.execute('SELECT estado, moneda FROM solicitudes WHERE id = ?',
+                         (solicitud_id,)).fetchone()
         if not s:
             return None, 'La AGC no existe'
         if s['estado'] != 'autorizada':
             return None, 'Solo se pueden imputar pagos a una AGC ya autorizada'
+        # El pago va en la moneda de la AGC; en dólares, con el tipo de cambio del día
+        # del pago (para controlar el tope de quien firma la conformidad).
+        cambio = 0.0
+        if mon.normalizar(s['moneda']) == 'USD':
+            cambio = mon.tipo_cambio(datos.get('tipo_cambio'))
+            if cambio <= 0:
+                return None, 'La AGC es en dólares: indicá el tipo de cambio del pago'
 
         cur = conn.execute(
-            'INSERT INTO pagos (solicitud_id, descripcion, monto, fecha, cargado_por) '
-            'VALUES (?, ?, ?, ?, ?)',
+            'INSERT INTO pagos (solicitud_id, descripcion, monto, fecha, cargado_por, tipo_cambio) '
+            'VALUES (?, ?, ?, ?, ?, ?)',
             (solicitud_id, str(datos.get('descripcion') or '').strip(), monto,
-             str(datos.get('fecha') or '').strip(), str(datos.get('cargado_por') or '').strip()))
+             str(datos.get('fecha') or '').strip(), str(datos.get('cargado_por') or '').strip(),
+             cambio))
         pago_id = cur.lastrowid
         for i, f in enumerate(facturas or []):
             conn.execute(
@@ -74,6 +84,7 @@ def resumen(solicitud):
     imputado = sum(float(p.get('monto') or 0) for p in solicitud.get('pagos', []))
     abierta = solicitud.get('tipo_orden') == 'abierta'
     return {
+        'moneda': mon.normalizar(solicitud.get('moneda')),
         'presupuesto': presupuesto,
         'imputado': round(imputado, 2),
         'saldo': round(presupuesto - imputado, 2),
@@ -97,7 +108,9 @@ def firmar_pago(conn, solicitud, pago, autorizado):
         return False, f'{autorizado["nombre"]} ya firmó este pago', False
 
     tope = autorizado['monto_autorizado']
-    excedio = tope is not None and float(pago['monto'] or 0) > tope
+    # Los topes están en pesos: un pago en dólares se compara con su tipo de cambio.
+    excedio = tope is not None and mon.en_pesos(pago['monto'], solicitud['moneda'],
+                                                pago['tipo_cambio']) > tope
     conn.execute(
         'INSERT INTO pago_firmas (pago_id, autorizado_id, excedio_tope, monto_tope) '
         'VALUES (?, ?, ?, ?)', (pago['id'], autorizado['id'], 1 if excedio else 0, tope))
