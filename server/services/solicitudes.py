@@ -288,7 +288,8 @@ def listar(estado=None, busqueda=None, empresa=None):
 def para_firmar(autorizado_id):
     """Solicitudes pendientes que le tocan a este autorizante: habilitado para la
     marca, que todavía no firmó y que quien cargó el gasto lo eligió para avisarle.
-    Ordenadas por las que necesitan 2a firma primero.
+    Ordenadas por urgencia (las urgentes primero) y después de la última cargada
+    a la primera.
 
     Si ninguno de los elegidos puede ya firmarla (solicitud anterior a la elección,
     elegidos que ya firmaron y falta la 2a firma, o dados de baja), se muestra a
@@ -321,8 +322,9 @@ def para_firmar(autorizado_id):
             d['firmas'] = firmas
             d['requiere_segunda_firma'] = (firmas == 1)
             salida.append(d)
-        # las que ya tienen 1 firma (esperando la 2a) primero.
-        salida.sort(key=lambda x: (not x['requiere_segunda_firma'], -x['id']))
+        # urgentes primero; dentro de cada grupo, de la última cargada a la primera.
+        salida.sort(key=lambda x: (x.get('created_at') or '', x['id']), reverse=True)
+        salida.sort(key=lambda x: x.get('criticidad') != 'urgente')
         return salida
     finally:
         conn.close()

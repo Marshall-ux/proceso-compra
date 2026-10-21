@@ -177,6 +177,9 @@ export default function HomePage() {
                         {' · '}{(s.marcas || []).length > 1 ? 'varias marcas' : (s.marca === 'OTRO' ? s.marca_otro : s.marca)}
                       </span>
                     </span>
+                    {s.criticidad === 'urgente' && (
+                      <span className="badge badge--danger">Urgente</span>
+                    )}
                     <span className="para-firmar-item__monto">{fmtImporte(s.monto_total, s.moneda)}</span>
                     {s.requiere_segunda_firma && (
                       <span className="badge badge--warning">falta 2ª firma</span>
