@@ -3,14 +3,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
+    # Vuelve solo si se reinicia el servidor o se cae el proceso. (En producción lo
+    # hacía un docker-compose.override.yml sin versionar; ya no hace falta.)
+    restart: unless-stopped
+    # El código va dentro de la imagen, no montado: corre exactamente lo que se
+    # construyó. Solo se montan los datos, que tienen que sobrevivir a cada build.
     volumes:
-      - ./server:/app
-      # Tapa el .venv local para que el contenedor no vea el entorno de Windows.
-      - /app/.venv
       - sqlite_data:/app/data
       - ./server/uploads:/app/uploads
     environment:
-      - FLASK_ENV=development
       - DATABASE_PATH=/app/data/app.db
       # Clave de administración (blanquear/generar códigos/desbloquear PINs).
       # El valor real va en el archivo .env (no se sube a git). Ver .env.example.
@@ -50,6 +51,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+    restart: unless-stopped
     ports:
       - "8092:80"
     depends_on:
