@@ -6,6 +6,7 @@ aplican solicitud por solicitud).
 """
 
 from services.marcas import listas_habilitadas
+from services.pdf_fill import fmt_money
 from services.pins import (
     MAX_INTENTOS, esta_bloqueado, momento_desbloqueo, registrar_intento, verificar_pin,
 )
@@ -103,15 +104,24 @@ def firmar(conn, solicitud, autorizado):
     # Los topes están en pesos: una solicitud en dólares se compara convertida.
     excedio = tope is not None and monto_pesos(solicitud) > tope
 
+    # Con firmante elegido hay una sola firma, así que tiene que cubrir el monto. Si no
+    # lo cubre (le bajaron el tope después de cargarla) no se registra una firma que no
+    # alcanza y que editar borraría igual: se destraba eligiendo otro firmante.
+    if elegidos and excedio:
+        return False, (f'El monto supera el tope de {autorizado["nombre"]} '
+                       f'($ {fmt_money(tope)}), así que su firma no alcanza. Para destrabarla, '
+                       f'editá la solicitud y elegí otro firmante con tope suficiente.'), False
+
     conn.execute(
         'INSERT INTO autorizaciones (solicitud_id, autorizado_id, excedio_tope, monto_tope) '
         'VALUES (?, ?, ?, ?)', (solicitud['id'], autorizado['id'], 1 if excedio else 0, tope))
 
     firmas = conn.execute('SELECT COUNT(*) AS n FROM autorizaciones WHERE solicitud_id = ?',
                           (solicitud['id'],)).fetchone()['n']
-    # Regla: alcanza UNA firma si el monto no supera el tope de quien firmó (o es sin
-    # límite). Si lo supera, queda pendiente hasta una segunda firma de otra persona.
-    if firmas >= AUTORIZACIONES_REQUERIDAS or (firmas == 1 and not excedio):
+    # Con firmante elegido, su firma la autoriza. En las viejas sin firmante sigue la
+    # regla anterior: alcanza UNA firma si el monto no supera el tope de quien firmó (o
+    # es sin límite); si lo supera, queda pendiente hasta una segunda de otra persona.
+    if elegidos or firmas >= AUTORIZACIONES_REQUERIDAS or (firmas == 1 and not excedio):
         conn.execute('UPDATE solicitudes SET estado = "autorizada", '
                      'updated_at = datetime("now", "localtime") WHERE id = ?', (solicitud['id'],))
 

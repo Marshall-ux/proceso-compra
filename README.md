@@ -28,16 +28,18 @@ autorizado elegido la firma digitalmente.
 
 - **Un firmante por solicitud**, elegido al cargarla: solo esa persona puede firmarla
   (las cargadas antes de esta regla, sin firmante, las firma cualquier habilitado).
-  Alcanza **una firma** dentro de su tope. La misma persona no puede firmar dos veces.
+  Su firma la deja **autorizada**: no hay segunda firma. La misma persona no puede firmar
+  dos veces.
 - **PIN por persona**: cada autorizado define su PIN la primera vez que firma. Se guarda
   hasheado (PBKDF2-SHA256), nunca en claro.
 - **Marca**: sólo pueden firmar los autorizados habilitados para esa marca.
   Los de **Multimarca** pueden autorizar cualquiera; la planilla de **Kia** cubre también
   Suzuki y la de **Jeep** corresponde a FCA / Chrysler.
 - **Topes**: al cargar solo se puede elegir como firmante a quien cubre el monto. Si
-  igual lo supera (por ejemplo, le bajaron el tope), se avisa y se permite firmar, y queda
-  registrado en el PDF, pero con su firma no alcanza: se destraba editando la solicitud y
-  eligiendo otro firmante (editar borra las firmas). Los directores figuran *sin límite*.
+  después deja de cubrirlo (por ejemplo, le bajaron el tope), no puede firmar: se destraba
+  editando la solicitud y eligiendo otro firmante. Los directores figuran *sin límite*.
+  Las viejas sin firmante siguen con la regla anterior: una firma dentro del tope alcanza;
+  si lo supera, queda registrado en el PDF y hace falta una segunda de otra persona.
 - **Edición**: si se edita una solicitud ya firmada, las firmas se borran y hay que
   volver a autorizar. Una autorizada no se puede modificar.
 
@@ -54,8 +56,8 @@ Detalles a tener en cuenta:
 - El formulario no expone campo rellenable para *duración de orden abierta*,
   *concepto → otros* ni *condiciones → otras*: se escriben sobre la línea del original.
 - El detalle tiene **6 renglones**. Si la factura trae más, la app avisa para agruparlos.
-- El original tiene un único recuadro "AUTORIZADO POR"; como el proceso exige dos
-  firmas, ese recuadro se divide en dos mitades.
+- El original tiene un único recuadro "AUTORIZADO POR". La firma del firmante elegido lo
+  ocupa entero; solo se divide en dos mitades cuando hay dos firmas (solicitudes viejas).
 
 Si sale un **Rev. 08**: reemplazar el PDF de `server/assets/` y revisar el mapa de
 campos en `services/pdf_fill.py`.
@@ -203,10 +205,11 @@ firma se rechaza aunque esté habilitada para la marca. Las solicitudes cargadas
 de que existiera la elección no tienen firmante y las sigue pudiendo firmar cualquier
 habilitado.
 
-Si el elegido ya no puede firmar (lo dieron de baja, se editó la marca o el monto, o le
-bajaron el tope y hace falta una segunda firma), el detalle lo avisa: se destraba con
-**Editar**, eligiendo otro firmante. Al nuevo le llega el mail y, como editar borra las
-firmas, la firma desde cero. La firma de conformidad de los pagos imputados no cambia.
+Si el elegido ya no puede firmar (lo dieron de baja, no está habilitado para la marca, o
+le bajaron el tope y ya no cubre el monto), el detalle lo avisa y no lo deja firmar: se
+destraba con **Editar**, eligiendo otro firmante. Al nuevo le llega el mail y la firma
+desde cero. La firma de conformidad de los pagos imputados no cambia (ahí sigue la
+segunda firma cuando el pago supera el tope de quien firma).
 
 El mail de cada autorizado vive en la base y se carga en el panel de **Autorizados**
 con la clave de administración. Quien no tiene mail aparece en la lista pero no se

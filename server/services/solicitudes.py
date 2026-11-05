@@ -254,11 +254,11 @@ def obtener(solicitud_id):
                 'FROM autorizaciones a JOIN autorizados au ON au.id = a.autorizado_id '
                 'WHERE a.solicitud_id = ? ORDER BY a.fecha', (solicitud_id,))
         ]
-        # Regla nueva: alcanza 1 firma dentro del tope; si la supera, hace falta una 2a.
         firmas = solicitud['autorizaciones']
         autorizada = solicitud['estado'] == 'autorizada'
-        # requiere 2a firma = hay una sola firma y quedó pendiente porque excedió el tope.
-        solicitud['requiere_segunda_firma'] = (not autorizada and len(firmas) == 1)
+        # Segunda firma solo en las viejas sin firmante elegido: una firma que excedió el
+        # tope las deja pendientes. Con firmante elegido hay una sola firma, que lo cubre.
+        solicitud['requiere_segunda_firma'] = (not autorizada and len(firmas) == 1 and not ids)
         solicitud['autorizaciones_faltantes'] = 0 if autorizada else 1
 
         # Pagos imputados a esta AGC (import diferido para evitar ciclo de imports).
@@ -299,8 +299,8 @@ def listar(estado=None, busqueda=None, empresa=None):
 
 def para_firmar(autorizado_id):
     """Solicitudes pendientes que le tocan a este autorizante: habilitado para la
-    marca, que todavía no firmó y que es el firmante que eligió quien cargó el gasto
-    (la misma regla que `autorizacion.firmar`: solo firma el elegido).
+    marca, que todavía no firmó y que es el firmante que eligió quien cargó el gasto,
+    con tope que cubre el monto (las mismas reglas que `autorizacion.firmar`).
     Ordenadas por urgencia (las urgentes primero) y después de la última cargada
     a la primera.
 
@@ -308,7 +308,7 @@ def para_firmar(autorizado_id):
     muestran a todos los habilitados, que son quienes pueden firmarlas."""
     conn = get_db()
     try:
-        a = conn.execute('SELECT lista FROM autorizados WHERE id = ? AND activo = 1',
+        a = conn.execute('SELECT lista, monto_autorizado FROM autorizados WHERE id = ? AND activo = 1',
                          (autorizado_id,)).fetchone()
         if not a:
             return []
@@ -324,11 +324,16 @@ def para_firmar(autorizado_id):
             elegidos = ids_avisar_a(s)
             if elegidos and autorizado_id not in elegidos:
                 continue
+            # Si su tope ya no cubre el monto no puede firmarla (autorizacion.firmar): no se
+            # le lista. La solicitud se destraba editándola y eligiendo otro firmante.
+            tope = a['monto_autorizado']
+            if elegidos and tope is not None and monto_pesos(s) > tope:
+                continue
             firmas = len(firmaron)
             d = _fila_a_dict(s)
             d['marcas'] = marcas_de(s)
             d['firmas'] = firmas
-            d['requiere_segunda_firma'] = (firmas == 1)
+            d['requiere_segunda_firma'] = (firmas == 1 and not elegidos)
             salida.append(d)
         # urgentes primero; dentro de cada grupo, de la última cargada a la primera.
         salida.sort(key=lambda x: (x.get('created_at') or '', x['id']), reverse=True)

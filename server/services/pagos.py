@@ -2,8 +2,9 @@
 
 La AGC controla el presupuesto; cada pago (anticipo/avance de una obra, viaje de un
 flete, etc.) se firma como conformidad de que el servicio/avance se dio. Los pagos no
-re-autorizan la AGC. Misma regla de firma que la AGC: alcanza 1 firma si el monto del
-pago no supera el tope de quien firma; si lo supera, hace falta una 2a.
+re-autorizan la AGC. Firma cualquier habilitado para la marca: alcanza 1 firma si el
+monto del pago no supera el tope de quien firma; si lo supera, hace falta una 2a. (Es la
+regla que tenían las AGC antes del firmante elegido; en los pagos se decidió mantenerla.)
 """
 
 from models.database import get_db
@@ -94,7 +95,7 @@ def resumen(solicitud):
 
 
 def firmar_pago(conn, solicitud, pago, autorizado):
-    """Registra una firma de conformidad. Misma regla que la AGC.
+    """Registra una firma de conformidad: 1 firma dentro del tope, 2 si lo supera.
     Devuelve (ok, motivo, excedio_tope). Asume el autorizante ya verificado (PIN)."""
     if pago['estado'] == 'conforme':
         return False, 'El pago ya está conforme', False

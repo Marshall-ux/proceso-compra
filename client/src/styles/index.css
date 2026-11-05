@@ -308,6 +308,7 @@ table.data { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 
 /* ----------------------------- autorizantes ----------------------------- */
 .firmas { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.2rem; }
+.firmas--una { grid-template-columns: 1fr; }
 .firma {
   border: 2px dashed var(--border-strong);
   border-radius: var(--radius);
