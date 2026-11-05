@@ -9,7 +9,7 @@ from services.marcas import listas_habilitadas
 from services.pins import (
     MAX_INTENTOS, esta_bloqueado, momento_desbloqueo, registrar_intento, verificar_pin,
 )
-from services.solicitudes import AUTORIZACIONES_REQUERIDAS, marcas_de, monto_pesos
+from services.solicitudes import AUTORIZACIONES_REQUERIDAS, ids_avisar_a, marcas_de, monto_pesos
 
 
 class ErrorAutorizante(Exception):
@@ -80,6 +80,18 @@ def firmar(conn, solicitud, autorizado):
     if autorizado['lista'] not in listas_habilitadas(marcas):
         detalle = marcas[0] if len(marcas) == 1 else 'esas marcas (requiere autorizante que las cubra todas)'
         return False, f'{autorizado["nombre"]} no está habilitado para {detalle}', False
+
+    # Solo firma quien eligió quien cargó la solicitud. Las cargadas antes de que se
+    # eligiera firmante no tienen ninguno: esas siguen abiertas a cualquier habilitado.
+    # Si el elegido ya no puede firmar (baja, cambio de marca o de tope), se destraba
+    # editando la solicitud y eligiendo otro: no se abre a los demás por las suyas.
+    elegidos = ids_avisar_a(solicitud)
+    if elegidos and autorizado['id'] not in elegidos:
+        nombres = ', '.join(r['nombre'] for r in conn.execute(
+            f'SELECT nombre FROM autorizados WHERE id IN ({", ".join("?" * len(elegidos))}) '
+            f'ORDER BY nombre', elegidos))
+        return False, (f'{autorizado["nombre"]} no puede firmarla: la firma '
+                       f'{nombres or "el firmante elegido"}, que es a quien eligieron al cargarla'), False
 
     ya = conn.execute(
         'SELECT 1 FROM autorizaciones WHERE solicitud_id = ? AND autorizado_id = ?',

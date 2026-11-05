@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react'
 import { LISTAS, fmtMoney } from '../constants.js'
 import { candidatosAviso } from '../services/api.js'
 
-// A quién se le manda el mail de "gasto para autorizar". Quien carga la solicitud
-// tiene que elegir al menos uno: sin esto el aviso le llegaría a toda la planilla.
-// La lista sale del servidor según la marca y el monto (solo quien puede firmarlo).
+// Quién firma la solicitud. Quien la carga tiene que elegir UNA persona, y el mail de
+// "gasto para autorizar" le llega exclusivamente a ella (ni a toda la planilla ni a
+// varios a la vez). La lista sale del servidor según la marca y el monto: solo quien
+// puede firmarlo solo. `valores` es [id] o []: el servidor lo guarda como lista.
 export default function SelectorAvisados({ marcas, monto, valores = [], onChange }) {
   const [candidatos, setCandidatos] = useState([])
   const [cargando, setCargando] = useState(false)
   const clave = `${(marcas || []).join('|')}#${Number(monto) || 0}`
+  const elegido = valores[0]
 
   useEffect(() => {
     if (!(marcas || []).length || !(Number(monto) > 0)) {
@@ -23,9 +25,9 @@ export default function SelectorAvisados({ marcas, monto, valores = [], onChange
         .then((lista) => {
           if (!vigente) return
           setCandidatos(lista)
-          // Si cambió la marca o el monto, se descarta a quien ya no puede firmar.
+          // Si cambió la marca o el monto y el elegido ya no puede firmar, se descarta.
           const validos = new Set(lista.filter((c) => c.tiene_mail).map((c) => c.id))
-          const filtrados = valores.filter((id) => validos.has(id))
+          const filtrados = valores.filter((id) => validos.has(id)).slice(0, 1)
           if (filtrados.length !== valores.length) onChange(filtrados)
         })
         .catch(() => vigente && setCandidatos([]))
@@ -34,13 +36,10 @@ export default function SelectorAvisados({ marcas, monto, valores = [], onChange
     return () => { vigente = false; clearTimeout(t) }
   }, [clave])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  const alternar = (id) =>
-    onChange(valores.includes(id) ? valores.filter((x) => x !== id) : [...valores, id])
-
   return (
     <div className="seccion">
       <div className="seccion__titulo">
-        ¿A quién le avisamos? <span style={{ color: 'var(--danger)' }}>*</span>
+        ¿Quién firma esta solicitud? <span style={{ color: 'var(--danger)' }}>*</span>
       </div>
       {!(marcas || []).length || !(Number(monto) > 0) ? (
         <div className="field__nota">
@@ -57,7 +56,7 @@ export default function SelectorAvisados({ marcas, monto, valores = [], onChange
         <>
           <div className="opciones">
             {candidatos.map((c) => {
-              const activa = valores.includes(c.id)
+              const activa = elegido === c.id
               return (
                 <label
                   key={c.id}
@@ -68,8 +67,8 @@ export default function SelectorAvisados({ marcas, monto, valores = [], onChange
                     : 'No tiene mail cargado: pedile a administración que lo cargue'}
                 >
                   <input
-                    type="checkbox" name="avisar_a" checked={activa}
-                    disabled={!c.tiene_mail} onChange={() => alternar(c.id)}
+                    type="radio" name="avisar_a" checked={activa}
+                    disabled={!c.tiene_mail} onChange={() => onChange([c.id])}
                   />
                   {c.nombre}
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -80,8 +79,8 @@ export default function SelectorAvisados({ marcas, monto, valores = [], onChange
             })}
           </div>
           <div className="field__nota">
-            Le llega un mail solo a quien tildes. Aparecen únicamente quienes pueden autorizar
-            esta marca por este monto.
+            Elegí una sola persona: el mail le llega únicamente a ella. Aparecen solo quienes
+            pueden autorizar esta marca por este monto.
           </div>
         </>
       )}

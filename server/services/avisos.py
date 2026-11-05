@@ -2,11 +2,11 @@
 
 Dos momentos, dos destinatarios:
 
-1. **Alta del gasto** -> a los autorizantes que eligio quien cargo la solicitud
-   (de entre los que pueden firmarlo por marca y monto): hay una AGC esperando
-   firma. Sin esa firma el gasto no avanza; ese es todo el motivo del mail.
-2. **Queda autorizada** -> a la cajera de cada razon social imputada: ya puede
-   pagarse.
+1. **Alta del gasto** -> exclusivamente al firmante que eligio quien cargo la
+   solicitud (uno solo, de entre los que pueden firmarlo por marca y monto): hay
+   una AGC esperando su firma. Sin copia a nadie mas.
+2. **Queda autorizada** -> a la cajera de cada razon social imputada, segun la
+   ubicacion (Rosario / Santa Fe) de la solicitud: ya puede pagarse.
 
 Reglas (aprendidas del Cotizador de Subastas, no son negociables):
 
@@ -16,8 +16,8 @@ Reglas (aprendidas del Cotizador de Subastas, no son negociables):
 - Un mail por destinatario, nunca un `To:` con todos: no se ven las casillas
   entre si y un rebote no se lleva puesto al otro aviso.
 - El mail de cada autorizante esta en la base (lo mantiene administracion desde
-  el panel). Las cajeras y la copia fija salen de env vars, con los defaults de
-  abajo; mover a alguien es tocar el `.env`. Lista vacia = no se avisa.
+  el panel). Las cajeras salen de env vars, con los defaults de abajo; mover a
+  alguien es tocar el `.env`. Lista vacia = no se avisa.
 - El link sale de `base_url()` (PUBLIC_BASE_URL), no de `request.url_root`
   pelado: detras de nginx el request dice `backend:5000` y el mail ya salio.
 - Sale una sola vez por transicion, marcada en la base (ver `_marcar`).
@@ -29,7 +29,7 @@ import os
 
 from mail_neostar import APP_COLOR, APP_NOMBRE, base_url, enviar_mail, mail_layout
 from models.database import get_db
-from services.marcas import CONCEPTOS
+from services.marcas import CONCEPTOS, UBICACIONES
 from services.pdf_fill import fmt_equivalente, fmt_importe
 from services.solicitudes import ids_avisar_a, marcas_de
 
@@ -39,7 +39,22 @@ log = logging.getLogger(__name__)
 # no al home. Ahi el autorizante elige su nombre y confirma con su PIN.
 RUTA_DETALLE = '/proceso-compra/solicitudes/{id}'
 
-# Cajeras de administracion, por razon social a la que se imputa el pago.
+# Cajeras de administracion, por ubicacion de la solicitud y razon social a la que
+# se imputa el pago (listado pasado por administracion el 05-11-2026).
+# Env var para pisar cada una: CAJA_<UBICACION>_<EMPRESA>, ej. CAJA_SANTA_FE_HIKARI.
+_CAJERAS_POR_UBICACION = {
+    ('ROSARIO', 'ALCO_ROSARIO'): 'nblois@neostar.com.ar',
+    ('SANTA_FE', 'ALCO_ROSARIO'): 'mgonzalez@neostar.com.ar',
+    ('ROSARIO', 'NEOSTAR'): 'mspurello@neostar.com.ar',
+    ('SANTA_FE', 'NEOSTAR'): 'evanlesberg@neostar.com.ar',
+    ('ROSARIO', 'HIKARI'): 'bcoll@neostar.com.ar',
+    ('SANTA_FE', 'HIKARI'): 'dmorelli@neostar.com.ar',
+}
+
+# Cajera por razon social sola: es la que se usaba antes de que existiera la
+# ubicacion. Sirve para las solicitudes viejas (sin ubicacion) y para las razones
+# sociales que el listado por sede no cubre (XINOXIA, DASEOS).
+# Env var: CAJA_<EMPRESA>.
 _CAJERAS = {
     'ALCO_ROSARIO': 'nblois@neostar.com.ar',
     'NEOSTAR': 'mspurello@neostar.com.ar',
@@ -82,30 +97,43 @@ def _clave_empresa(empresa):
 
 
 def destinatarios_autorizantes(solicitud):
-    """A quien hay que avisarle que este gasto espera firma: los autorizados que
-    eligio quien cargo la solicitud, mas la copia fija de administracion.
+    """A quien hay que avisarle que este gasto espera firma: exclusivamente el
+    firmante que eligio quien cargo la solicitud.
 
-    No hay fallback a "toda la planilla": elegir es obligatorio en el alta, y un
-    aviso a todos es justamente lo que se quiso sacar."""
+    Sin copia fija ni fallback a "toda la planilla": elegir es obligatorio en el
+    alta, y el pedido es que el mail le llegue solo a la persona elegida."""
     ids = ids_avisar_a(solicitud)
-    destinos = []
-    if ids:
-        conn = get_db()
-        try:
-            destinos = [r['email'] for r in conn.execute(
-                f'SELECT email FROM autorizados WHERE id IN ({", ".join("?" * len(ids))})', ids)]
-        finally:
-            conn.close()
-    destinos += _lista(_config('AUTORIZA_NOTIF_EMAIL'))
+    if not ids:
+        return []
+    conn = get_db()
+    try:
+        destinos = [r['email'] for r in conn.execute(
+            f'SELECT email FROM autorizados WHERE id IN ({", ".join("?" * len(ids))})', ids)]
+    finally:
+        conn.close()
     return _lista(','.join(destinos))
 
 
+def _cajera(ubicacion, empresa):
+    """Mail(s) de la cajera de una razon social en una ubicacion. Primero el listado
+    por sede (env var y despues default); si la solicitud no tiene ubicacion o la
+    razon social no esta en ese listado, la cajera por razon social de siempre."""
+    clave = _clave_empresa(empresa)
+    sede = _clave_empresa(ubicacion)
+    if sede:
+        especifica = _config(f'CAJA_{sede}_{clave}',
+                             _CAJERAS_POR_UBICACION.get((sede, clave)))
+        if especifica is not None:
+            return _lista(especifica)
+    return _lista(_config(f'CAJA_{clave}', _CAJERAS.get(clave, '')))
+
+
 def destinatarios_cajeras(solicitud):
-    """La cajera de cada razon social a la que se imputa el gasto."""
+    """La cajera de cada razon social a la que se imputa el gasto, en la ubicacion
+    de la solicitud."""
     destinos = []
     for empresa in (solicitud.get('empresas') or []):
-        clave = _clave_empresa(empresa)
-        destinos += _lista(_config(f'CAJA_{clave}', _CAJERAS.get(clave, '')))
+        destinos += _cajera(solicitud.get('ubicacion'), empresa)
     return _lista(','.join(destinos))
 
 
@@ -181,6 +209,7 @@ def _resumen(solicitud):
         ('Monto', fmt_importe(solicitud.get('monto_total'), solicitud.get('moneda'))
          + (f' ({fmt_equivalente(solicitud)})' if fmt_equivalente(solicitud) else '')),
         ('Empresa', ', '.join(solicitud.get('empresas') or [])),
+        ('Ubicación', UBICACIONES.get(solicitud.get('ubicacion'), solicitud.get('ubicacion'))),
         ('Marca', ', '.join(marcas_de(solicitud))),
         ('Concepto', solicitud.get('concepto_otro')
          or CONCEPTOS.get(solicitud.get('concepto'), solicitud.get('concepto'))),
@@ -209,14 +238,27 @@ def _enviar_a_cada_uno(destinos, asunto, texto, html_body, motivo):
 
 
 def notificar_gasto_a_autorizar(solicitud, request=None):
-    """Avisa a los autorizantes que hay un gasto nuevo esperando su firma.
+    """Avisa al firmante elegido que hay un gasto nuevo esperando su firma.
 
     Se llama DESPUES de guardar el gasto, y una sola vez: en la transicion a
-    pendiente (el alta). Editar un gasto ya cargado no vuelve a avisar.
+    pendiente (el alta). Editar un gasto ya cargado no vuelve a avisar, salvo que
+    se cambie el firmante (ver `notificar_cambio_firmante`).
     """
     if not _marcar(solicitud['id'], 'notificado_at'):
         return 0
+    return _mail_para_firmar(solicitud, request)
 
+
+def notificar_cambio_firmante(solicitud, request=None):
+    """Avisa al firmante nuevo cuando se edita la solicitud y se elige a otro. Sin
+    marca de idempotencia: lo dispara solo la edicion que cambia el firmante, y
+    cada cambio es un firmante distinto que tiene que enterarse."""
+    if solicitud.get('estado') != 'pendiente':
+        return 0
+    return _mail_para_firmar(solicitud, request)
+
+
+def _mail_para_firmar(solicitud, request=None):
     destinos = destinatarios_autorizantes(solicitud)
     if not destinos:
         log.info('Solicitud #%s sin destinatarios de aviso configurados', solicitud['id'])
@@ -230,7 +272,8 @@ def notificar_gasto_a_autorizar(solicitud, request=None):
     texto = (
         f'Se cargó un gasto que necesita autorización.\n\n'
         f'{resumen_txt}\n\n'
-        f'La solicitud queda PENDIENTE: no avanza hasta que un autorizante la firme.\n\n'
+        f'Te eligieron como firmante: sos la única persona que puede autorizarla, '
+        f'y la solicitud queda PENDIENTE hasta que la firmes.\n\n'
         f'Para autorizarla, entrá a la app y confirmá con tu PIN:\n{link}\n\n'
         f'--\nMail automático de {APP_NOMBRE}'
     )
@@ -241,8 +284,9 @@ def notificar_gasto_a_autorizar(solicitud, request=None):
         + resumen_html
         + '<p style="margin:0 0 24px; padding:14px 16px; background:#fff7ed; '
           'border-left:3px solid #f59e0b; border-radius:8px; font-size:14px; '
-          'color:#111827; line-height:1.6;">La solicitud queda <strong>pendiente</strong> '
-          'y no avanza hasta que alguien la autorice.</p>'
+          'color:#111827; line-height:1.6;">Te eligieron como firmante: sos la '
+          '<strong>única persona</strong> que puede autorizarla, y queda '
+          '<strong>pendiente</strong> hasta que la firmes.</p>'
         + _boton('Ver y autorizar', link, 'Se firma dentro de la app, con tu PIN. ')
     )
     return _enviar_a_cada_uno(

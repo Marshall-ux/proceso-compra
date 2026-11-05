@@ -4,7 +4,8 @@ import CambioTipoOrden from '../components/CambioTipoOrden.jsx'
 import FormularioSolicitud from '../components/FormularioSolicitud.jsx'
 import PanelAutorizacion from '../components/PanelAutorizacion.jsx'
 import SeccionPagos from '../components/SeccionPagos.jsx'
-import { fmtImporte, fmtMoney } from '../constants.js'
+import SelectorAvisados from '../components/SelectorAvisados.jsx'
+import { UBICACIONES, fmtImporte, fmtMoney, montoEnPesos } from '../constants.js'
 import {
   actualizarSolicitud, eliminarSolicitud, obtenerSolicitud,
   urlCbuImagen, urlFactura, urlLegajo, urlPdf, urlPdfCompleto, urlZip,
@@ -106,10 +107,14 @@ export default function DetallePage() {
                 </span>}
           </h1>
           <div className="toolbar__info">
-            {solicitud.proveedor_nombre} · {solicitud.marca} · {fmtImporte(solicitud.monto_total, solicitud.moneda)}
+            {solicitud.proveedor_nombre} · {solicitud.marca}
+            {solicitud.ubicacion && <> · {UBICACIONES.find((u) => u.valor === solicitud.ubicacion)?.etiqueta || solicitud.ubicacion}</>}
+            {' '}· {fmtImporte(solicitud.monto_total, solicitud.moneda)}
             {solicitud.moneda === 'USD' && <> (TC {fmtMoney(solicitud.tipo_cambio)} = $ {fmtMoney(solicitud.monto_pesos)})</>}
             {solicitud.criticidad === 'urgente' && <> · <span className="badge badge--danger">Urgente</span></>}
-            {solicitud.avisados?.length > 0 && <> · 📧 Aviso a {solicitud.avisados.join(', ')}</>}
+            {solicitud.avisados?.length > 0 && (
+              <> · 📧 {solicitud.avisados.length === 1 ? 'Firmante elegido' : 'Aviso a'}: {solicitud.avisados.join(', ')}</>
+            )}
           </div>
           <div className="toolbar__info" style={{ marginTop: '0.35rem', display: 'flex', gap: '0.9rem', flexWrap: 'wrap' }}>
             {solicitud.facturas?.map((f, i) => (
@@ -200,6 +205,13 @@ export default function DetallePage() {
               </div>
             )}
             <FormularioSolicitud datos={borrador} onChange={setBorrador} />
+            {/* Solo firma el elegido: si cambió la marca o el monto, o el elegido ya no
+                puede firmar, acá se elige otro y le llega el mail. */}
+            <SelectorAvisados
+              marcas={borrador.marcas} valores={borrador.avisar_a || []}
+              monto={montoEnPesos(borrador.monto_total, borrador.moneda, borrador.tipo_cambio)}
+              onChange={(avisar_a) => setBorrador((d) => ({ ...d, avisar_a }))}
+            />
             <div className="toolbar" style={{ marginBottom: 0 }}>
               <button className="btn btn--ghost" onClick={() => setEditando(false)}>Cancelar</button>
               <button className="btn btn--primary" onClick={guardar} disabled={guardando}>
