@@ -178,8 +178,9 @@ def eliminaciones():
 
 @bp.route('/solicitudes/<int:solicitud_id>/autorizar', methods=['POST'])
 def autorizar(solicitud_id):
-    """Registra la firma del firmante elegido. Alcanza una firma dentro de su tope;
-    si lo supera, queda pendiente de una segunda (ver services/autorizacion.py)."""
+    """Registra la firma del firmante elegido, que la deja autorizada (su tope tiene que
+    cubrir el monto). Las viejas sin firmante siguen con la regla de la segunda firma
+    (ver services/autorizacion.py)."""
     data = request.get_json(silent=True) or {}
     pin = str(data.get('pin') or '')
 

@@ -254,11 +254,11 @@ def obtener(solicitud_id):
                 'FROM autorizaciones a JOIN autorizados au ON au.id = a.autorizado_id '
                 'WHERE a.solicitud_id = ? ORDER BY a.fecha', (solicitud_id,))
         ]
-        # Regla nueva: alcanza 1 firma dentro del tope; si la supera, hace falta una 2a.
         firmas = solicitud['autorizaciones']
         autorizada = solicitud['estado'] == 'autorizada'
-        # requiere 2a firma = hay una sola firma y quedó pendiente porque excedió el tope.
-        solicitud['requiere_segunda_firma'] = (not autorizada and len(firmas) == 1)
+        # Segunda firma solo en las viejas sin firmante elegido: una firma que excedió el
+        # tope las deja pendientes. Con firmante elegido hay una sola firma, que lo cubre.
+        solicitud['requiere_segunda_firma'] = (not autorizada and len(firmas) == 1 and not ids)
         solicitud['autorizaciones_faltantes'] = 0 if autorizada else 1
 
         # Pagos imputados a esta AGC (import diferido para evitar ciclo de imports).
@@ -328,7 +328,7 @@ def para_firmar(autorizado_id):
             d = _fila_a_dict(s)
             d['marcas'] = marcas_de(s)
             d['firmas'] = firmas
-            d['requiere_segunda_firma'] = (firmas == 1)
+            d['requiere_segunda_firma'] = (firmas == 1 and not elegidos)
             salida.append(d)
         # urgentes primero; dentro de cada grupo, de la última cargada a la primera.
         salida.sort(key=lambda x: (x.get('created_at') or '', x['id']), reverse=True)

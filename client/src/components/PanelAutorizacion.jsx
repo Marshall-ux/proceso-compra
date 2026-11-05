@@ -19,8 +19,13 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
   const firmas = solicitud.autorizaciones || []
   const completa = solicitud.estado === 'autorizada'
   const requiere2 = solicitud.requiere_segunda_firma
-  // El elegido ya no puede firmar (baja, cambio de marca, ya firmó y falta una 2ª).
-  const trabada = !completa && conFirmante && !disponibles.some((a) => !a.ya_firmo)
+  // Con firmante elegido hay una sola firma y tiene que cubrir el monto. Queda trabada si
+  // el elegido ya no puede: baja, otra marca, le bajaron el tope, o firmó sin cubrirlo
+  // antes de esta regla.
+  const elegidoExcede = conFirmante && disponibles.some((a) => !a.ya_firmo && a.excede_tope)
+  const trabada = !completa && conFirmante && !disponibles.some((a) => !a.ya_firmo && !a.excede_tope)
+  // Lugares de firma: uno solo con firmante elegido; las viejas muestran el de la segunda.
+  const lugares = completa || conFirmante ? (firmas.length ? firmas : [null]) : [...firmas, null]
   const primerUso = elegido && !elegido.tiene_pin
 
   // El PIN es solo numérico: si se tipea otra cosa (letras, o el teclado numérico con
@@ -93,21 +98,18 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
       <div className="card__hint">
         {completa
           ? 'Autorizada. El PDF ya está disponible.'
-          : requiere2
-            ? trabada
-              // Con firmante único nadie más puede dar la 2ª firma: el aviso de abajo dice cómo destrabarla.
-              ? <>El monto <strong>supera el tope</strong> de {firmas[0]?.nombre}: con su firma no alcanza.</>
-              : <>El monto <strong>supera el tope</strong> de {firmas[0]?.nombre}: necesita una <strong>segunda firma</strong> de otra persona.</>
-            : conFirmante
-              ? <>Solo puede firmarla <strong>{solicitud.avisados?.join(', ') || 'el firmante elegido'}</strong>, que es a quien eligieron al cargarla.</>
+          : conFirmante
+            ? <>Solo puede firmarla <strong>{solicitud.avisados?.join(', ') || 'el firmante elegido'}</strong>, que es a quien eligieron al cargarla{trabada ? '.' : ': con su firma queda autorizada.'}</>
+            : requiere2
+              ? <>El monto <strong>supera el tope</strong> de {firmas[0]?.nombre}: necesita una <strong>segunda firma</strong> de otra persona.</>
               : <>Con una firma <strong>dentro del tope</strong> del autorizante queda autorizada. Si el monto supera su tope, hará falta una segunda.</>}
       </div>
 
-      <div className="firmas">
-        {(completa ? firmas : [...firmas, null]).map((f, i) => (
+      <div className={`firmas ${lugares.length === 1 ? 'firmas--una' : ''}`}>
+        {lugares.map((f, i) => (
           <div key={i} className={`firma ${f ? 'firma--completa' : ''}`}>
             <div className="firma__slot">
-              {f ? `Firma ${i + 1}` : (firmas.length ? 'Segunda firma' : 'Autorización')}
+              {f ? (lugares.length > 1 ? `Firma ${i + 1}` : 'Firma') : (firmas.length ? 'Segunda firma' : 'Autorización')}
             </div>
             {f ? (
               <>
@@ -153,11 +155,13 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
 
           {trabada && (
             <div className="alert alert--warning">
-              {requiere2
-                ? 'Falta una segunda firma y el firmante elegido ya firmó.'
-                : 'El firmante elegido ya no puede firmar esta solicitud (dado de baja, o no está habilitado para esta marca).'}
+              {firmas.length > 0
+                ? 'La firma que tiene no alcanza: el monto supera el tope de quien firmó.'
+                : elegidoExcede
+                  ? 'El monto supera el tope del firmante elegido (se lo bajaron después de cargarla).'
+                  : 'El firmante elegido ya no puede firmar esta solicitud (dado de baja, o no está habilitado para esta marca).'}
               {' '}Para destrabarla, tocá <strong>Editar</strong> en "Datos de la autorización" y
-              elegí otro firmante: le llega el mail y puede firmarla.
+              elegí otro firmante con tope suficiente: le llega el mail y puede firmarla.
             </div>
           )}
 
@@ -169,7 +173,7 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
                 type="button"
                 key={a.id}
                 className={`autorizado ${elegido?.id === a.id ? 'autorizado--elegido' : ''}`}
-                disabled={a.ya_firmo || a.bloqueado}
+                disabled={a.ya_firmo || a.bloqueado || (conFirmante && a.excede_tope)}
                 onClick={() => elegir(a)}
                 title={a.conceptos}
               >

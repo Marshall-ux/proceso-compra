@@ -282,6 +282,51 @@ class SoloFirmaElElegido(ConApi):
         self.assertEqual(r.status_code, 400)
 
 
+class UnaSolaFirma(ConApi):
+    """Con firmante elegido no hay segunda firma: la suya la autoriza, y si su tope ya
+    no cubre el monto no firma (se destraba eligiendo otro firmante)."""
+
+    def test_la_firma_del_elegido_la_autoriza_sola(self):
+        r = self.firmar(self.alta(), self.uno).get_json()
+        self.assertEqual(r['estado'], 'autorizada')
+        self.assertEqual(len(r['autorizaciones']), 1)
+        self.assertFalse(r['requiere_segunda_firma'])
+
+    def test_elegido_que_ya_no_cubre_el_monto_no_firma(self):
+        sid = self.alta()
+        self.fijar_tope(self.uno, 500)
+        r = self.firmar(sid, self.uno)
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('supera el tope', r.get_json()['error'])
+        s = svc.obtener(sid)
+        self.assertEqual((s['estado'], s['autorizaciones']), ('pendiente', []))
+        self.assertFalse(s['requiere_segunda_firma'])
+
+        # Se destraba editando y eligiendo otro firmante, que la firma solo.
+        r = self.api.put(f'/api/solicitudes/{sid}', json=self.datos(avisar_a=[self.otro]))
+        self.assertEqual(r.status_code, 200, r.get_json())
+        self.assertEqual(self.firmar(sid, self.otro).get_json()['estado'], 'autorizada')
+
+    def test_en_lote_tampoco_firma_sin_cubrir_el_monto(self):
+        sid = self.alta()
+        self.fijar_tope(self.uno, 500)
+        r = self.api.post('/api/solicitudes/autorizar-lote',
+                          json={'autorizado_id': self.uno, 'pin': PIN, 'ids': [sid]}).get_json()
+        self.assertEqual(r['firmadas'], [])
+        self.assertIn('supera el tope', r['salteadas'][0]['motivo'])
+
+    def test_vieja_sin_firmante_sigue_con_segunda_firma(self):
+        sid = self.alta()
+        self.fijar_avisar_a(sid, '')
+        self.fijar_tope(self.otro, 500)
+        r = self.firmar(sid, self.otro).get_json()
+        self.assertEqual(r['estado'], 'pendiente')
+        self.assertTrue(r['requiere_segunda_firma'])
+        pendiente = {s['id']: s for s in svc.para_firmar(self.uno)}[sid]
+        self.assertTrue(pendiente['requiere_segunda_firma'])
+        self.assertEqual(self.firmar(sid, self.uno).get_json()['estado'], 'autorizada')
+
+
 class RecuadroDeFirmasDelPdf(ConApi):
     """Recuadro AUTORIZADO POR del F 8.4-01: una autorizada nunca dice "Pendiente de
     autorización", y la mitad para una segunda firma aparece solo si hace falta."""
