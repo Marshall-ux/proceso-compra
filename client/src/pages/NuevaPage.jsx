@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import FormularioSolicitud from '../components/FormularioSolicitud.jsx'
 import SelectorAvisados from '../components/SelectorAvisados.jsx'
-import { CONCEPTOS, fmtFechaHora, fmtImporte, montoEnPesos } from '../constants.js'
-import { abiertasSimilares, crearSolicitud, extraerFacturas } from '../services/api.js'
+import { CONCEPTOS, cuitValido, fmtFechaHora, fmtImporte, irAlPrimerError, montoEnPesos } from '../constants.js'
+import { abiertasSimilares, buscarProveedor, crearSolicitud, extraerFacturas } from '../services/api.js'
 
 const VACIA = {
   fecha: '', empresa: '', marca: '', empresas: [], marcas: [], marca_otro: '', ubicacion: '',
@@ -18,6 +18,31 @@ const VACIA = {
   avisar_a: [],   // [id] del firmante elegido: el mail le llega solo a esa persona
 }
 
+// Lo que quien carga repite siempre: el navegador lo recuerda para la próxima.
+const RECORDADOS = { solicitado_por: 'alta_solicitado_por', ubicacion: 'alta_ubicacion' }
+
+const vacia = () => {
+  const datos = { ...VACIA }
+  for (const [campo, clave] of Object.entries(RECORDADOS)) {
+    try {
+      datos[campo] = localStorage.getItem(clave) || ''
+    } catch {
+      datos[campo] = ''
+    }
+  }
+  return datos
+}
+
+const recordar = (datos) => {
+  for (const [campo, clave] of Object.entries(RECORDADOS)) {
+    try {
+      if (datos[campo]) localStorage.setItem(clave, datos[campo])
+    } catch {
+      // sin almacenamiento del navegador, la próxima vez se tipea de nuevo
+    }
+  }
+}
+
 export default function NuevaPage() {
   const navigate = useNavigate()
   const inputRef = useRef(null)
@@ -25,10 +50,17 @@ export default function NuevaPage() {
   const [cargando, setCargando] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [arrastrando, setArrastrando] = useState(false)
-  const [datos, setDatos] = useState(VACIA)
+  const [datos, setDatos] = useState(vacia)
   const [autocompletados, setAutocompletados] = useState([])
   const [aviso, setAviso] = useState('')
   const [errores, setErrores] = useState([])
+  const [campos, setCampos] = useState({})   // errores por campo, que marca el servidor
+  const irAlError = useRef(false)
+  // Proveedor ya conocido por su CUIT (solicitudes anteriores): completa lo que falta.
+  const [proveedor, setProveedor] = useState(null)
+  const cuitBuscado = useRef('')
+  const datosRef = useRef(datos)
+  datosRef.current = datos
   // Órdenes abiertas del mismo CUIT, marca y concepto: se pregunta si es la misma
   // antes de crear otra solicitud (lo que corresponde es sumarle la factura como pago).
   const [similares, setSimilares] = useState([])
@@ -43,7 +75,7 @@ export default function NuevaPage() {
       const r = await extraerFacturas(lista)
       const leidos = Object.entries(r.datos || {}).filter(([, v]) => v !== '' && v !== 0).map(([k]) => k)
       setDatos({
-        ...VACIA,
+        ...vacia(),
         ...r.datos,
         items: r.items || [],
         facturas: r.facturas || [],
@@ -60,6 +92,74 @@ export default function NuevaPage() {
     }
   }
 
+  // Al tocar un campo con error, ese error se va; los demás quedan hasta volver a guardar.
+  const cambiar = (nuevo) => {
+    setCampos((c) => {
+      const quedan = Object.fromEntries(Object.entries(c).filter(([k]) => nuevo[k] === datos[k]))
+      return Object.keys(quedan).length === Object.keys(c).length ? c : quedan
+    })
+    setDatos(nuevo)
+  }
+
+  // Después de un intento fallido, lleva al primer campo marcado.
+  useEffect(() => {
+    if (!irAlError.current) return
+    irAlError.current = false
+    irAlPrimerError()
+  }, [campos, errores])
+
+  // Si se cierra o recarga la pestaña con la solicitud a medio cargar, el navegador pregunta.
+  useEffect(() => {
+    if (paso !== 2) return undefined
+    const avisar = (e) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', avisar)
+    return () => window.removeEventListener('beforeunload', avisar)
+  }, [paso])
+
+  // Con un CUIT válido se buscan las solicitudes anteriores del proveedor y se completan
+  // solos los datos vacíos (nunca se pisa lo que ya está cargado). Pasa tanto si se
+  // tipea como si el CUIT viene de la factura.
+  useEffect(() => {
+    const digitos = String(datos.cuit || '').replace(/\D/g, '')
+    if (!cuitValido(digitos)) {
+      cuitBuscado.current = ''
+      setProveedor(null)
+      return undefined
+    }
+    if (digitos === cuitBuscado.current) return undefined
+    cuitBuscado.current = digitos
+    let vigente = true
+    buscarProveedor(digitos).then((r) => {
+      if (!vigente) return
+      setProveedor(r)
+      if (!r.encontrado) return
+      const actual = datosRef.current
+      // El CBU se completa recién si se elige transferencia (ver el efecto de abajo).
+      const { cbu, cbu_imagen: cbuImagen, ...resto } = r.datos
+      const nuevos = Object.fromEntries(Object.entries({ ...resto, proveedor_tipo: 'habitual' })
+        .filter(([campo, valor]) => valor && !String(actual[campo] || '').trim()))
+      if (Object.keys(nuevos).length === 0) return
+      setDatos({ ...actual, ...nuevos })
+      setAutocompletados((a) => [...new Set([...a, ...Object.keys(nuevos)])])
+    }).catch(() => vigente && setProveedor(null))
+    return () => { vigente = false }
+  }, [datos.cuit])
+
+  // El CBU de la última vez entra cuando se elige transferencia y no hay uno cargado.
+  useEffect(() => {
+    const anterior = proveedor?.encontrado ? proveedor.datos : null
+    if (!anterior || !(anterior.cbu || anterior.cbu_imagen)) return
+    if (!(datos.forma_pago || '').split(',').includes('transferencia')) return
+    if (datos.cbu || datos.cbu_imagen) return
+    setDatos((d) => ({ ...d, cbu: anterior.cbu || '', cbu_imagen: anterior.cbu_imagen || '' }))
+    setAutocompletados((a) => [...new Set([...a, 'cbu'])])
+  }, [datos.forma_pago, proveedor])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const notaCuit = proveedor && (proveedor.encontrado
+    ? <>Proveedor conocido: ya tiene {proveedor.solicitudes} solicitud{proveedor.solicitudes === 1 ? '' : 'es'} (la
+        última, la #{proveedor.ultima_id}). Completamos los datos que faltaban: revisalos.</>
+    : 'No hay solicitudes anteriores con este CUIT. Si es un proveedor nuevo, hace falta el legajo.')
+
   const guardar = async (esOtra = false) => {
     setGuardando(true)
     setErrores([])
@@ -73,10 +173,12 @@ export default function NuevaPage() {
       }
       setSimilares([])
       const creada = await crearSolicitud(datos)
+      recordar(datos)
       navigate(`/solicitudes/${creada.id}`)
     } catch (e) {
       setErrores(e.data?.errores || [e.message])
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+      setCampos(e.data?.campos || {})
+      irAlError.current = true
     } finally {
       setGuardando(false)
     }
@@ -96,7 +198,7 @@ export default function NuevaPage() {
   }
 
   const continuarSinFactura = () => {
-    setDatos(VACIA)
+    setDatos(vacia())
     setAutocompletados([])
     setPaso(2)
   }
@@ -156,7 +258,8 @@ export default function NuevaPage() {
         <div className="card">
           <div className="card__title">✏️ Revisá y completá la autorización</div>
           <div className="card__hint">
-            Los campos en verde los leímos de la factura: revisalos igual.
+            Los campos en verde los completamos solos (de la factura o de solicitudes anteriores
+            del proveedor): revisalos igual. Los que tienen <span className="obligatorio">*</span> son obligatorios.
             {datos.facturas?.length > 0 && (
               <> {datos.facturas.length === 1 ? 'Factura' : `${datos.facturas.length} facturas`}:{' '}
                 <strong>{datos.facturas.map((f) => f.nombre).join(', ')}</strong>.</>
@@ -164,18 +267,32 @@ export default function NuevaPage() {
           </div>
           {aviso && <div className="alert alert--warning">{aviso}</div>}
           {errores.length > 0 && (
-            <div className="alert alert--error">
-              Revisá estos puntos:
-              <ul>{errores.map((e, i) => <li key={i}>{e}</li>)}</ul>
-            </div>
+            Object.keys(campos).length > 0 ? (
+              <div className="alert alert--error">
+                {Object.keys(campos).length === 1
+                  ? 'Falta revisar un dato: está marcado en rojo abajo.'
+                  : `Faltan revisar ${Object.keys(campos).length} datos: están marcados en rojo abajo.`}
+              </div>
+            ) : (
+              <div className="alert alert--error">
+                Revisá estos puntos:
+                <ul>{errores.map((e, i) => <li key={i}>{e}</li>)}</ul>
+              </div>
+            )
           )}
 
-          <FormularioSolicitud datos={datos} onChange={setDatos} autocompletados={autocompletados} />
+          <FormularioSolicitud
+            datos={datos} onChange={cambiar} autocompletados={autocompletados}
+            errores={campos} notaCuit={notaCuit}
+          />
 
           <SelectorAvisados
-            marcas={datos.marcas} valores={datos.avisar_a}
+            marcas={datos.marcas} valores={datos.avisar_a} error={campos.avisar_a}
             monto={montoEnPesos(datos.monto_total, datos.moneda, datos.tipo_cambio)}
-            onChange={(avisar_a) => setDatos((d) => ({ ...d, avisar_a }))}
+            onChange={(avisar_a) => {
+              setCampos(({ avisar_a: _, ...resto }) => resto)
+              setDatos((d) => ({ ...d, avisar_a }))
+            }}
           />
 
           <div className="toolbar" style={{ marginBottom: 0 }}>

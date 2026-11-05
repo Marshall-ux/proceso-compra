@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import CambioTipoOrden from '../components/CambioTipoOrden.jsx'
 import FormularioSolicitud from '../components/FormularioSolicitud.jsx'
@@ -6,7 +6,9 @@ import PanelAutorizacion from '../components/PanelAutorizacion.jsx'
 import ResumenSolicitud from '../components/ResumenSolicitud.jsx'
 import SeccionPagos from '../components/SeccionPagos.jsx'
 import SelectorAvisados from '../components/SelectorAvisados.jsx'
-import { UBICACIONES, estadoDe, fmtFechaHora, fmtImporte, fmtMoney, montoEnPesos } from '../constants.js'
+import {
+  UBICACIONES, estadoDe, fmtFechaHora, fmtImporte, fmtMoney, irAlPrimerError, montoEnPesos,
+} from '../constants.js'
 import {
   actualizarSolicitud, eliminarSolicitud, obtenerSolicitud,
   urlCbuImagen, urlFactura, urlLegajo, urlPdf, urlPdfCompleto, urlZip,
@@ -23,6 +25,8 @@ export default function DetallePage() {
   const [editando, setEditando] = useState(false)
   const [error, setError] = useState('')
   const [errores, setErrores] = useState([])
+  const [campos, setCampos] = useState({})      // errores de la edición, por campo
+  const irAlError = useRef(false)
   const [guardando, setGuardando] = useState(false)
   const [borrando, setBorrando] = useState(false)      // muestra el modal de motivo
   const [motivo, setMotivo] = useState('')
@@ -41,6 +45,13 @@ export default function DetallePage() {
   }, [id])
 
   useEffect(() => { cargar() }, [cargar])
+
+  // Después de un intento fallido de guardar la edición, lleva al primer campo marcado.
+  useEffect(() => {
+    if (!irAlError.current) return
+    irAlError.current = false
+    irAlPrimerError()
+  }, [campos, errores])
 
   // El estado de navegación se consume una vez: recargar la página no reabre el pago.
   useEffect(() => {
@@ -62,11 +73,13 @@ export default function DetallePage() {
     setBorrador({ ...solicitud })
     setEditando(true)
     setErrores([])
+    setCampos({})
   }
 
   const guardar = async () => {
     setGuardando(true)
     setErrores([])
+    setCampos({})
     try {
       const r = await actualizarSolicitud(id, borrador)
       setSolicitud({ ...r, autorizados_disponibles: solicitud.autorizados_disponibles })
@@ -74,6 +87,8 @@ export default function DetallePage() {
       await cargar()
     } catch (e) {
       setErrores(e.data?.errores || [e.message])
+      setCampos(e.data?.campos || {})
+      irAlError.current = true
     } finally {
       setGuardando(false)
     }
@@ -214,11 +229,11 @@ export default function DetallePage() {
                 <ul>{errores.map((e, i) => <li key={i}>{e}</li>)}</ul>
               </div>
             )}
-            <FormularioSolicitud datos={borrador} onChange={setBorrador} />
+            <FormularioSolicitud datos={borrador} onChange={setBorrador} errores={campos} />
             {/* Solo firma el elegido: si cambió la marca o el monto, o el elegido ya no
                 puede firmar, acá se elige otro y le llega el mail. */}
             <SelectorAvisados
-              marcas={borrador.marcas} valores={borrador.avisar_a || []}
+              marcas={borrador.marcas} valores={borrador.avisar_a || []} error={campos.avisar_a}
               monto={montoEnPesos(borrador.monto_total, borrador.moneda, borrador.tipo_cambio)}
               onChange={(avisar_a) => setBorrador((d) => ({ ...d, avisar_a }))}
             />

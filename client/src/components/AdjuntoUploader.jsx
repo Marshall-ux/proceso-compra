@@ -32,7 +32,7 @@ export default function AdjuntoUploader({ label, hint, accept, nombre, onSubir, 
       ) : (
         <>
           <button
-            type="button" className="btn btn--ghost btn--sm"
+            type="button" className="btn btn--ghost btn--sm" style={{ alignSelf: 'flex-start' }}
             onClick={() => ref.current?.click()} disabled={subiendo}
           >
             {subiendo ? <><span className="spinner spinner--dark" /> Subiendo…</> : '📎 Elegir archivo'}
