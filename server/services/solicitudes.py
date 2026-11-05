@@ -271,11 +271,15 @@ def obtener(solicitud_id):
 
 
 def listar(estado=None, busqueda=None, empresa=None):
+    """Lista para el inicio. Además de los datos, `firmante` (a quién espera: el firmante
+    elegido; vacío en las viejas, que firma cualquier habilitado) y `firmado_por`."""
     conn = get_db()
     try:
         sql = ('SELECT s.*, '
                '(SELECT COUNT(*) FROM autorizaciones a WHERE a.solicitud_id = s.id) AS firmas, '
-               '(SELECT COUNT(*) FROM facturas f WHERE f.solicitud_id = s.id) AS facturas '
+               '(SELECT COUNT(*) FROM facturas f WHERE f.solicitud_id = s.id) AS facturas, '
+               "(SELECT group_concat(au.nombre, ', ') FROM autorizaciones a "
+               ' JOIN autorizados au ON au.id = a.autorizado_id WHERE a.solicitud_id = s.id) AS firmado_por '
                'FROM solicitudes s WHERE 1=1')
         params = []
         if estado:
@@ -292,7 +296,13 @@ def listar(estado=None, busqueda=None, empresa=None):
                     'OR EXISTS (SELECT 1 FROM facturas f WHERE f.solicitud_id = s.id AND f.numero LIKE ?))')
             params += [f'%{busqueda}%'] * 8
         sql += ' ORDER BY s.id DESC'
-        return [_fila_a_dict(r) for r in conn.execute(sql, params)]
+        nombres = {r['id']: r['nombre'] for r in conn.execute('SELECT id, nombre FROM autorizados')}
+        salida = []
+        for r in conn.execute(sql, params):
+            d = _fila_a_dict(r)
+            d['firmante'] = ', '.join(nombres[i] for i in ids_avisar_a(d) if i in nombres)
+            salida.append(d)
+        return salida
     finally:
         conn.close()
 

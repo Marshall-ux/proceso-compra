@@ -92,6 +92,20 @@ export const LISTAS = {
 export const fmtMoney = (v) =>
   (Number(v) || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+// Cuánto hace que espera una solicitud cargada en `creada` ('2026-11-05 14:01:37'):
+// { texto: 'desde hoy' | 'desde ayer' | 'hace 3 días', demorada }. Demorada a partir de
+// las 48 h, que es cuando sale el primer recordatorio.
+export const esperaDesde = (creada) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(String(creada || ''))
+  if (!m) return { texto: '', demorada: false }
+  const desde = new Date(m[1], m[2] - 1, m[3], m[4], m[5])
+  const hoy = new Date()
+  const dias = Math.round((new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
+    - new Date(desde.getFullYear(), desde.getMonth(), desde.getDate())) / 864e5)
+  const texto = dias <= 0 ? 'desde hoy' : dias === 1 ? 'desde ayer' : `hace ${dias} días`
+  return { texto, demorada: hoy - desde >= 48 * 36e5 }
+}
+
 // '2026-07-16 14:01:37' -> '16/07/2026 14:01'
 export const fmtFechaHora = (v) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2})/.exec(String(v || ''))
