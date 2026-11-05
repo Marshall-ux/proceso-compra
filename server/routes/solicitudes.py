@@ -321,8 +321,8 @@ def crear_pago(solicitud_id):
 
 @bp.route('/solicitudes/<int:solicitud_id>/pagos/<int:pago_id>/firmar', methods=['POST'])
 def firmar_pago(solicitud_id, pago_id):
-    """Firma la conformidad de un pago (que el servicio/avance se dio). Misma regla que
-    la AGC: 1 firma dentro del tope, 2 si lo supera."""
+    """Firma la conformidad de un pago (que el servicio/avance se dio). La firma
+    cualquier habilitado para la marca: 1 firma dentro del tope, 2 si lo supera."""
     data = request.get_json(silent=True) or {}
     solicitud = svc.obtener(solicitud_id)
     if not solicitud:

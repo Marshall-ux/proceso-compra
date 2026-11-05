@@ -49,8 +49,8 @@ export default function PanelLote({ solicitudes, onListo }) {
         ✍️ Autorizar {solicitudes.length} solicitud(es) juntas
       </div>
       <div className="card__hint">
-        Total ${' '}{fmtMoney(total)}{hayDolares && ' (las de dólares, convertidas a pesos)'}. Las que no te
-        tengan como firmante elegido, no correspondan a tu marca o ya hayas firmado se saltean y te aviso cuáles.
+        Total ${' '}{fmtMoney(total)}{hayDolares && ' (las de dólares, convertidas a pesos)'}. Se firman solo las
+        que podrías firmar desde su detalle; las demás se saltean y te aviso cuáles y por qué.
       </div>
 
       {error && <div className="alert alert--error">{error}</div>}

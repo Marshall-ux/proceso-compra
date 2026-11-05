@@ -5,7 +5,7 @@ import {
 } from '../services/api.js'
 
 // Pagos imputados a una AGC autorizada. La AGC controla el presupuesto; cada pago se
-// firma como conformidad (misma regla que la AGC: 1 firma dentro del tope, 2 si lo supera).
+// firma como conformidad: cualquier habilitado, 1 firma dentro del tope y 2 si lo supera.
 // pagoInicial: factura que venía como solicitud nueva y resultó ser de esta orden
 // abierta; abre el formulario de pago ya cargado con ella.
 export default function SeccionPagos({ solicitud, onActualizar, pagoInicial }) {

@@ -307,6 +307,12 @@ class UnaSolaFirma(ConApi):
         self.assertEqual(r.status_code, 200, r.get_json())
         self.assertEqual(self.firmar(sid, self.otro).get_json()['estado'], 'autorizada')
 
+    def test_para_firmar_no_le_lista_lo_que_ya_no_puede_firmar(self):
+        sid = self.alta()
+        self.assertIn(sid, [s['id'] for s in svc.para_firmar(self.uno)])
+        self.fijar_tope(self.uno, 500)
+        self.assertNotIn(sid, [s['id'] for s in svc.para_firmar(self.uno)])
+
     def test_en_lote_tampoco_firma_sin_cubrir_el_monto(self):
         sid = self.alta()
         self.fijar_tope(self.uno, 500)
