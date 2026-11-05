@@ -127,14 +127,28 @@ def obtener(solicitud_id):
 
 @bp.route('/solicitudes/<int:solicitud_id>', methods=['PUT'])
 def actualizar(solicitud_id):
+    """Edita una solicitud pendiente. El firmante se vuelve a validar contra la marca
+    y el monto editados (pueden haber dejado al elegido sin poder firmarla), y editar
+    es también como se cambia de firmante si el elegido ya no puede (baja, tope)."""
     data = request.get_json(silent=True) or {}
+    previa = svc.obtener(solicitud_id)
+    if not previa:
+        return jsonify({'error': 'La solicitud no existe'}), 404
     errores = svc.validar(data)
+    avisar_a, errores_aviso = svc.validar_avisar_a(data)
+    errores += errores_aviso
     if errores:
         return jsonify({'error': 'Faltan datos obligatorios', 'errores': errores}), 400
-    ok, error = svc.actualizar(solicitud_id, data, data.get('items', []), data.get('facturas'))
+    ok, error = svc.actualizar(solicitud_id, data, data.get('items', []), data.get('facturas'),
+                               avisar_a=avisar_a)
     if not ok:
         return jsonify({'error': error}), 400
-    return jsonify(svc.obtener(solicitud_id))
+    solicitud = svc.obtener(solicitud_id)
+    # Mail solo si el firmante es alguien que no estaba avisado: al editar una vieja
+    # con varios avisados y quedarse con uno de ellos, esa persona ya tenía el mail.
+    if any(i not in previa['avisar_a'] for i in avisar_a):
+        _avisar(avisos.notificar_cambio_firmante, solicitud)
+    return jsonify(solicitud)
 
 
 @bp.route('/solicitudes/<int:solicitud_id>', methods=['DELETE'])

@@ -8,6 +8,13 @@ export const MARCAS = [
   'SHOWROOM FUNES', 'CAÑADA DE GOMEZ', 'OTRO',
 ]
 
+// Sede del gasto. No está en el formulario de papel: con la razón social define a qué
+// cajera le llega el aviso cuando la solicitud queda autorizada.
+export const UBICACIONES = [
+  { valor: 'rosario', etiqueta: 'Rosario' },
+  { valor: 'santa_fe', etiqueta: 'Santa Fe' },
+]
+
 export const CONCEPTOS = [
   { valor: 'publicidad', etiqueta: 'Publicidad / Marketing' },
   { valor: 'muebles', etiqueta: 'Muebles y útiles' },

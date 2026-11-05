@@ -4,7 +4,7 @@ import json
 
 from models.database import get_db
 from services import moneda as mon
-from services.marcas import listas_habilitadas
+from services.marcas import UBICACIONES, listas_habilitadas
 from services.pins import esta_bloqueado
 
 AUTORIZACIONES_REQUERIDAS = 2
@@ -22,6 +22,8 @@ CAMPOS = (
     'empresas', 'marcas',
     # Moneda (ver services/moneda.py)
     'moneda', 'tipo_cambio',
+    # Sede: con la razón social define a qué cajera se avisa (ver services/avisos.py)
+    'ubicacion',
 )
 
 # Columnas numericas: se guardan como numero, no como texto.
@@ -118,6 +120,11 @@ def validar(datos):
         errores.append('Seleccioná al menos una empresa a la que imputar el pago')
     if not marcas:
         errores.append('Seleccioná al menos una marca')
+    # Sin ubicación no se sabe a qué cajera avisar cuando quede autorizada.
+    if not str(datos.get('ubicacion') or '').strip():
+        errores.append('Elegí la ubicación (Rosario o Santa Fe)')
+    elif datos.get('ubicacion') not in UBICACIONES:
+        errores.append('Ubicación inválida')
     if float(datos.get('monto_total') or 0) <= 0:
         errores.append('El monto presupuesto final debe ser mayor a cero')
     if str(datos.get('moneda') or 'ARS').strip().upper() not in mon.MONEDAS:
@@ -145,7 +152,7 @@ def crear(datos, items, facturas=None, avisar_a=None):
     datos = _normalizar(datos)
     conn = get_db()
     try:
-        # avisar_a va aparte de CAMPOS: se fija en el alta y editar no lo toca.
+        # avisar_a va aparte de CAMPOS: editar solo lo cambia si se elige otro firmante.
         columnas = CAMPOS + ('avisar_a',)
         valores = [_valor(c, datos) for c in CAMPOS] + [json.dumps(avisar_a or [])]
         cur = conn.execute(
@@ -161,7 +168,9 @@ def crear(datos, items, facturas=None, avisar_a=None):
         conn.close()
 
 
-def actualizar(solicitud_id, datos, items, facturas=None):
+def actualizar(solicitud_id, datos, items, facturas=None, avisar_a=None):
+    """avisar_a=None deja el firmante como está; una lista lo reemplaza. Editar es
+    también la forma de cambiar de firmante cuando el elegido ya no puede firmar."""
     conn = get_db()
     try:
         row = conn.execute('SELECT estado FROM solicitudes WHERE id = ?', (solicitud_id,)).fetchone()
@@ -178,6 +187,9 @@ def actualizar(solicitud_id, datos, items, facturas=None):
             f'UPDATE solicitudes SET {sets}, updated_at = datetime("now", "localtime") WHERE id = ?',
             valores + [solicitud_id],
         )
+        if avisar_a is not None:
+            conn.execute('UPDATE solicitudes SET avisar_a = ? WHERE id = ?',
+                         (json.dumps(avisar_a), solicitud_id))
         conn.execute('DELETE FROM items WHERE solicitud_id = ?', (solicitud_id,))
         _guardar_items(conn, solicitud_id, items)
         # facturas=None -> no se tocan (edicion que no cambia adjuntos); lista -> se reemplazan.
@@ -287,22 +299,19 @@ def listar(estado=None, busqueda=None, empresa=None):
 
 def para_firmar(autorizado_id):
     """Solicitudes pendientes que le tocan a este autorizante: habilitado para la
-    marca, que todavía no firmó y que quien cargó el gasto lo eligió para avisarle.
+    marca, que todavía no firmó y que es el firmante que eligió quien cargó el gasto
+    (la misma regla que `autorizacion.firmar`: solo firma el elegido).
     Ordenadas por urgencia (las urgentes primero) y después de la última cargada
     a la primera.
 
-    Si ninguno de los elegidos puede ya firmarla (solicitud anterior a la elección,
-    elegidos que ya firmaron y falta la 2a firma, o dados de baja), se muestra a
-    todos los habilitados para que no quede colgada. Es solo la lista: firmar desde
-    el detalle sigue abierto a cualquier habilitado."""
+    Las cargadas antes de que se eligiera firmante no tienen ninguno: esas se le
+    muestran a todos los habilitados, que son quienes pueden firmarlas."""
     conn = get_db()
     try:
         a = conn.execute('SELECT lista FROM autorizados WHERE id = ? AND activo = 1',
                          (autorizado_id,)).fetchone()
         if not a:
             return []
-        lista_de = {r['id']: r['lista'] for r in
-                    conn.execute('SELECT id, lista FROM autorizados WHERE activo = 1')}
         salida = []
         for s in conn.execute("SELECT * FROM solicitudes WHERE estado = 'pendiente' ORDER BY id DESC"):
             listas = listas_habilitadas(marcas_de(s))
@@ -312,8 +321,7 @@ def para_firmar(autorizado_id):
                 'SELECT autorizado_id FROM autorizaciones WHERE solicitud_id = ?', (s['id'],))}
             if autorizado_id in firmaron:
                 continue
-            elegidos = [i for i in ids_avisar_a(s)
-                        if lista_de.get(i) in listas and i not in firmaron]
+            elegidos = ids_avisar_a(s)
             if elegidos and autorizado_id not in elegidos:
                 continue
             firmas = len(firmaron)
@@ -387,10 +395,13 @@ def marcas_de(solicitud):
 
 def autorizados_para(solicitud):
     """Autorizados habilitados para la(s) marca(s) de la solicitud, marcando quien excede
-    su tope y quien ya firmó. Con varias marcas, solo quien las cubra todas."""
+    su tope, quien ya firmó y quien puede firmarla (el firmante elegido; en las
+    solicitudes viejas sin elegido, cualquiera). Con varias marcas, solo quien las
+    cubra todas."""
     listas = listas_habilitadas(marcas_de(solicitud))
     monto = monto_pesos(solicitud)
     ya_firmaron = {a['nombre'] for a in solicitud['autorizaciones']}
+    elegidos = ids_avisar_a(solicitud)
     conn = get_db()
     try:
         placeholders = ', '.join('?' * len(listas))
@@ -418,6 +429,7 @@ def autorizados_para(solicitud):
             'bloqueado_minutos': minutos,
             'excede_tope': tope is not None and monto > tope,
             'ya_firmo': r['nombre'] in ya_firmaron,
+            'puede_firmar': not elegidos or r['id'] in elegidos,
         })
     return autorizados
 
@@ -472,11 +484,14 @@ def candidatos_aviso(marcas, monto):
 
 
 def validar_avisar_a(datos):
-    """Quien carga la solicitud TIENE que elegir a quien avisarle: sin eso el aviso
-    terminaria yendo a toda la planilla, que es lo que se quiere evitar.
+    """Quien carga la solicitud TIENE que elegir al firmante, y uno solo: el aviso
+    le llega exclusivamente a esa persona. Ni toda la planilla ni varios a la vez,
+    para que no queden dos personas mirando el mismo gasto sin saber quien lo firma.
 
-    Devuelve (ids, errores). Se revalida contra los candidatos del servidor: el
-    navegador pudo quedar con una lista vieja (cambio la marca o el monto)."""
+    Devuelve (ids, errores); ids es una lista de un elemento (la columna sigue
+    siendo una lista JSON por las solicitudes viejas, que tienen varios). Se
+    revalida contra los candidatos del servidor: el navegador pudo quedar con una
+    lista vieja (cambio la marca o el monto)."""
     crudos = datos.get('avisar_a') or []
     if not isinstance(crudos, list):
         crudos = [crudos]
@@ -489,7 +504,9 @@ def validar_avisar_a(datos):
         if i not in ids:
             ids.append(i)
     if not ids:
-        return [], ['Elegí al menos un autorizado para avisarle que tiene que firmar']
+        return [], ['Elegí quién tiene que firmar esta solicitud (le llega el aviso por mail)']
+    if len(ids) > 1:
+        return ids, ['Elegí un solo firmante: el aviso le llega solo a esa persona']
 
     marcas = lista_multi(datos, 'marcas', 'marca')
     pesos = mon.en_pesos(datos.get('monto_total'), datos.get('moneda'), datos.get('tipo_cambio'))
@@ -498,7 +515,7 @@ def validar_avisar_a(datos):
     for i in ids:
         c = candidatos.get(i)
         if not c:
-            errores.append('Uno de los autorizados elegidos no puede firmar este gasto '
+            errores.append('El firmante elegido no puede firmar este gasto '
                            '(por marca o por monto). Revisá la selección.')
             break
         if not c['tiene_mail']:

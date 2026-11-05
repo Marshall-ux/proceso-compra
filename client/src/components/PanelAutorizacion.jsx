@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { LISTAS, fmtFechaHora, fmtImporte, fmtMoney } from '../constants.js'
 import { autorizar, definirPin, quitarAutorizacion } from '../services/api.js'
 
-// Panel de firmas: el proceso exige DOS autorizantes distintos.
+// Panel de firmas. Solo puede firmar el firmante que eligió quien cargó la solicitud
+// (las viejas, sin firmante elegido, las firma cualquier habilitado).
 export default function PanelAutorizacion({ solicitud, onActualizar }) {
   const [elegido, setElegido] = useState(null)
   const [pin, setPin] = useState('')
@@ -13,10 +14,13 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
   const [aviso, setAviso] = useState('')
   const [enviando, setEnviando] = useState(false)
 
-  const disponibles = solicitud.autorizados_disponibles || []
+  const conFirmante = (solicitud.avisar_a || []).length > 0
+  const disponibles = (solicitud.autorizados_disponibles || []).filter((a) => a.puede_firmar)
   const firmas = solicitud.autorizaciones || []
   const completa = solicitud.estado === 'autorizada'
   const requiere2 = solicitud.requiere_segunda_firma
+  // El elegido ya no puede firmar (baja, cambio de marca, ya firmó y falta una 2ª).
+  const trabada = !completa && conFirmante && !disponibles.some((a) => !a.ya_firmo)
   const primerUso = elegido && !elegido.tiene_pin
 
   // El PIN es solo numérico: si se tipea otra cosa (letras, o el teclado numérico con
@@ -91,7 +95,9 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
           ? 'Autorizada. El PDF ya está disponible.'
           : requiere2
             ? <>El monto <strong>supera el tope</strong> de {firmas[0]?.nombre}: necesita una <strong>segunda firma</strong> de otra persona.</>
-            : <>Con una firma <strong>dentro del tope</strong> del autorizante queda autorizada. Si el monto supera su tope, hará falta una segunda.</>}
+            : conFirmante
+              ? <>Solo puede firmarla <strong>{solicitud.avisados?.join(', ') || 'el firmante elegido'}</strong>, que es a quien eligieron al cargarla.</>
+              : <>Con una firma <strong>dentro del tope</strong> del autorizante queda autorizada. Si el monto supera su tope, hará falta una segunda.</>}
       </div>
 
       <div className="firmas">
@@ -136,10 +142,21 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
       ) : (
         <>
           <div className="card__hint" style={{ marginBottom: '0.7rem' }}>
-            Autorizados habilitados para <strong>{solicitud.marca}</strong> por un monto de{' '}
+            {conFirmante ? 'Firmante elegido' : 'Autorizados habilitados'} para{' '}
+            <strong>{solicitud.marca}</strong> por un monto de{' '}
             <strong>{fmtImporte(solicitud.monto_total, solicitud.moneda)}</strong>
             {solicitud.moneda === 'USD' && <> (equivale a <strong>$ {fmtMoney(solicitud.monto_pesos)}</strong>)</>}:
           </div>
+
+          {trabada && (
+            <div className="alert alert--warning">
+              {requiere2
+                ? 'Falta una segunda firma y el firmante elegido ya firmó.'
+                : 'El firmante elegido ya no puede firmar esta solicitud (dado de baja, o no está habilitado para esta marca).'}
+              {' '}Para destrabarla, tocá <strong>Editar</strong> en "Datos de la autorización" y
+              elegí otro firmante: le llega el mail y puede firmarla.
+            </div>
+          )}
 
           {error && !elegido && <div className="alert alert--error">{error}</div>}
 

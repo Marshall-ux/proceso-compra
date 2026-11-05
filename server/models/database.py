@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS solicitudes (
     legajo_archivo      TEXT NOT NULL DEFAULT '',    -- PDF del legajo impositivo
     empresas            TEXT NOT NULL DEFAULT '',    -- JSON: multi-selección de empresas
     marcas              TEXT NOT NULL DEFAULT '',    -- JSON: multi-selección de marcas
+    ubicacion           TEXT NOT NULL DEFAULT '',    -- rosario | santa_fe ('' = solicitud anterior)
     -- Avisos por mail ya enviados. Son la marca de idempotencia: el aviso sale en
     -- la transición (alta / queda autorizada), no en cada guardado.
     notificado_at          TEXT,                     -- aviso a los autorizantes
@@ -203,6 +204,9 @@ _COLUMNAS_V2 = {
     # solicitud: con él se compara contra los topes, que están en pesos.
     'moneda': "TEXT NOT NULL DEFAULT 'ARS'",
     'tipo_cambio': 'REAL NOT NULL DEFAULT 0',
+    # Sede (rosario | santa_fe): con la razón social define a qué cajera se avisa.
+    # Las solicitudes que ya existían quedan vacías y avisan como antes (por empresa).
+    'ubicacion': "TEXT NOT NULL DEFAULT ''",
 }
 
 
