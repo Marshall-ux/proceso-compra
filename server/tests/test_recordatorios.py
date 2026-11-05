@@ -98,6 +98,29 @@ class Recordatorios(ConApi):
         self.fijar_tope(self.uno, 500)
         self.assertEqual(recordatorios.enviar(LUNES), 0)
 
+    def test_las_que_ya_existian_cuentan_desde_que_llegan_los_recordatorios(self):
+        # Una base anterior a los recordatorios, con una pendiente de hace 5 días.
+        sid = self.alta()
+        conn = database.get_db()
+        try:
+            conn.execute("UPDATE solicitudes SET created_at = datetime('now', 'localtime', '-5 days') "
+                         'WHERE id = ?', (sid,))
+            for columna in ('aviso_firmante_at', 'recordatorio1_at', 'recordatorio2_at'):
+                conn.execute(f'ALTER TABLE solicitudes DROP COLUMN {columna}')
+            conn.commit()
+        finally:
+            conn.close()
+
+        database.init_db()   # el arranque de la versión nueva
+        conn = database.get_db()
+        try:
+            fila = conn.execute('SELECT * FROM solicitudes WHERE id = ?', (sid,)).fetchone()
+        finally:
+            conn.close()
+        ahora = datetime.now()
+        self.assertIsNone(recordatorios._que_toca(fila, ahora + timedelta(hours=47)))
+        self.assertEqual(recordatorios._que_toca(fila, ahora + timedelta(hours=49)), 'recordatorio1_at')
+
     def test_cambiar_el_firmante_reinicia_la_cuenta(self):
         sid = self.vencida()
         recordatorios.enviar(LUNES)

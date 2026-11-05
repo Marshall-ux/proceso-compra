@@ -264,6 +264,7 @@ _COLUMNAS_ELIMINACIONES = {
 
 def _migrar(conn):
     """Agrega a una base preexistente las columnas nuevas que falten."""
+    agregadas = set()
     for tabla, columnas in (('solicitudes', _COLUMNAS_V2), ('autorizados', _COLUMNAS_AUTORIZADOS),
                             ('facturas', _COLUMNAS_FACTURAS), ('pagos', _COLUMNAS_PAGOS),
                             ('eliminaciones', _COLUMNAS_ELIMINACIONES)):
@@ -271,6 +272,14 @@ def _migrar(conn):
         for columna, definicion in columnas.items():
             if columna not in existentes:
                 conn.execute(f'ALTER TABLE {tabla} ADD COLUMN {columna} {definicion}')
+                agregadas.add(columna)
+
+    # Recordatorios: las pendientes que ya existían cuando llegaron empiezan a contar
+    # desde ese momento, no desde su alta (decisión del 5-11-2026). Si no, el día del
+    # despliegue a cada firmante le llegaba de golpe todo lo atrasado.
+    if 'aviso_firmante_at' in agregadas:
+        conn.execute("UPDATE solicitudes SET aviso_firmante_at = datetime('now', 'localtime') "
+                     "WHERE estado = 'pendiente'")
 
 
 # Correcciones de nombre: el seed matchea por nombre, así que sin esto se crearía una
