@@ -10,5 +10,4 @@ client/dist/
 docs/
 server/uploads/*
 !server/uploads/.gitkeep
-server/generated/*
-!server/generated/.gitkeep
+server/generated/

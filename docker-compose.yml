@@ -9,7 +9,6 @@ services:
       - /app/.venv
       - sqlite_data:/app/data
       - ./server/uploads:/app/uploads
-      - ./server/generated:/app/generated
     environment:
       - FLASK_ENV=development
       - DATABASE_PATH=/app/data/app.db

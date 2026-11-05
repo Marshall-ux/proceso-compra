@@ -420,8 +420,12 @@ def _completar_overlay(solicitud):
     return ov.guardar()
 
 
-def generar_pdf(solicitud, destino):
-    """Escribe el formulario oficial completado y aplanado en `destino`."""
+def generar_pdf(solicitud, destino=None):
+    """Formulario oficial completado y aplanado. Sin `destino` lo devuelve en memoria
+    (BytesIO), que es lo que usan las rutas y el ZIP; con `destino` lo escribe ahí.
+
+    Antes se guardaba siempre en generated/, pero se regenera en cada pedido y esa copia
+    nunca se volvía a leer: en producción llegó a casi 1 GB de PDFs sin uso."""
     plantilla = PdfReader(PLANTILLA)
     pagina = plantilla.pages[0]
 
@@ -441,16 +445,22 @@ def generar_pdf(solicitud, destino):
         '/Producer': 'Sistema de Autorizaciones de Compra',
     })
 
+    salida = io.BytesIO()
+    writer.write(salida)
+    salida.seek(0)
+    if destino is None:
+        return salida
     with open(destino, 'wb') as fh:
-        writer.write(fh)
+        fh.write(salida.getvalue())
     return destino
 
 
-def generar_pdf_con_facturas(ruta_autorizacion, rutas_facturas, destino):
-    """Un solo PDF: la autorización adelante y las facturas atrás, para imprimir todo junto.
-    Una factura ilegible no rompe el armado: se omite y se informa."""
+def generar_pdf_con_facturas(autorizacion, rutas_facturas):
+    """Un solo PDF en memoria: la autorización (el BytesIO de `generar_pdf`) adelante y
+    las facturas atrás, para imprimir todo junto. Una factura ilegible no rompe el
+    armado: se omite. Devuelve (BytesIO, nombres_omitidos)."""
     writer = PdfWriter()
-    for pagina in PdfReader(ruta_autorizacion).pages:
+    for pagina in PdfReader(autorizacion).pages:
         writer.add_page(pagina)
 
     omitidas = []
@@ -461,9 +471,10 @@ def generar_pdf_con_facturas(ruta_autorizacion, rutas_facturas, destino):
         except Exception:
             omitidas.append(nombre)
 
-    with open(destino, 'wb') as fh:
-        writer.write(fh)
-    return omitidas
+    salida = io.BytesIO()
+    writer.write(salida)
+    salida.seek(0)
+    return salida, omitidas
 
 
 def excede_items(solicitud):
