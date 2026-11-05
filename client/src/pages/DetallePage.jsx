@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import CambioTipoOrden from '../components/CambioTipoOrden.jsx'
 import FormularioSolicitud from '../components/FormularioSolicitud.jsx'
 import PanelAutorizacion from '../components/PanelAutorizacion.jsx'
+import ResumenSolicitud from '../components/ResumenSolicitud.jsx'
 import SeccionPagos from '../components/SeccionPagos.jsx'
 import SelectorAvisados from '../components/SelectorAvisados.jsx'
 import { UBICACIONES, fmtImporte, fmtMoney, montoEnPesos } from '../constants.js'
@@ -29,6 +30,7 @@ export default function DetallePage() {
   const [claveBorrar, setClaveBorrar] = useState('')   // clave admin (solo autorizadas)
   const [errorBorrar, setErrorBorrar] = useState('')
   const [confirmando, setConfirmando] = useState(false)
+  const [verFormulario, setVerFormulario] = useState(false)   // PDF embebido, a pedido
 
   const cargar = useCallback(async () => {
     try {
@@ -166,17 +168,9 @@ export default function DetallePage() {
         </div>
       )}
 
-      <PanelAutorizacion solicitud={solicitud} onActualizar={setSolicitud} />
-
-      {!completa && <CambioTipoOrden solicitud={solicitud} onActualizar={setSolicitud} />}
-
-      {completa && (
-        <SeccionPagos solicitud={solicitud} onActualizar={setSolicitud}
-                      pagoInicial={desdeAlta.pagoInicial} />
-      )}
-
+      {/* Primero lo que se firma, después la firma. */}
       <div className="card">
-        <div className="toolbar" style={{ marginBottom: editando ? '1.2rem' : 0 }}>
+        <div className="toolbar" style={{ marginBottom: '1.2rem' }}>
           <div className="card__title" style={{ marginBottom: 0 }}>📋 Datos de la autorización</div>
           {!editando && (
             <div className="toolbar__actions">
@@ -220,9 +214,30 @@ export default function DetallePage() {
             </div>
           </>
         ) : (
-          <iframe className="visor" src={urlPdf(solicitud.id)} title={`Autorización ${solicitud.id}`} />
+          <>
+            <ResumenSolicitud solicitud={solicitud} />
+            {/* El formulario oficial embebido queda a pedido: en el celular un PDF dentro
+                de la página suele no verse (para eso está "Ver PDF" arriba). */}
+            <button className="btn btn--ghost btn--sm" style={{ marginTop: '1rem' }}
+                    onClick={() => setVerFormulario((v) => !v)}>
+              {verFormulario ? 'Ocultar el formulario oficial' : 'Ver el formulario oficial acá'}
+            </button>
+            {verFormulario && (
+              <iframe className="visor" style={{ marginTop: '0.9rem' }} src={urlPdf(solicitud.id)}
+                      title={`Autorización ${solicitud.id}`} />
+            )}
+          </>
         )}
       </div>
+
+      <PanelAutorizacion solicitud={solicitud} onActualizar={setSolicitud} />
+
+      {!completa && <CambioTipoOrden solicitud={solicitud} onActualizar={setSolicitud} />}
+
+      {completa && (
+        <SeccionPagos solicitud={solicitud} onActualizar={setSolicitud}
+                      pagoInicial={desdeAlta.pagoInicial} />
+      )}
 
       {borrando && (
         <div className="modal-fondo" onClick={() => !confirmando && setBorrando(false)}>

@@ -2,10 +2,30 @@ import { useState } from 'react'
 import { LISTAS, fmtFechaHora, fmtImporte, fmtMoney } from '../constants.js'
 import { autorizar, definirPin, quitarAutorizacion } from '../services/api.js'
 
+// Quién queda seleccionado al abrir: si una sola persona puede firmar (lo normal, el
+// firmante elegido) o si es quien eligió su nombre en "Soy:" del inicio, va directo al
+// PIN sin buscarse en la lista.
+function sugerido(firmables) {
+  if (firmables.length === 1) return firmables[0]
+  let recordado = ''
+  try {
+    recordado = localStorage.getItem('firmante') || ''
+  } catch {
+    recordado = ''
+  }
+  return firmables.find((a) => String(a.id) === recordado) || null
+}
+
 // Panel de firmas. Solo puede firmar el firmante que eligió quien cargó la solicitud
 // (las viejas, sin firmante elegido, las firma cualquier habilitado).
 export default function PanelAutorizacion({ solicitud, onActualizar }) {
-  const [elegido, setElegido] = useState(null)
+  const conFirmante = (solicitud.avisar_a || []).length > 0
+  const disponibles = (solicitud.autorizados_disponibles || []).filter((a) => a.puede_firmar)
+  const firmables = disponibles.filter((a) => !a.ya_firmo && !a.bloqueado && !(conFirmante && a.excede_tope))
+  const [elegido, setElegido] = useState(() => (solicitud.estado === 'autorizada' ? null : sugerido(firmables)))
+  // El foco va al PIN solo si la persona tocó su nombre: al abrir la página, saltar al
+  // PIN escondería el resumen de lo que se firma.
+  const [enfocarPin, setEnfocarPin] = useState(false)
   const [pin, setPin] = useState('')
   const [codigo, setCodigo] = useState('')
   const [pinNuevo, setPinNuevo] = useState('')
@@ -14,8 +34,6 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
   const [aviso, setAviso] = useState('')
   const [enviando, setEnviando] = useState(false)
 
-  const conFirmante = (solicitud.avisar_a || []).length > 0
-  const disponibles = (solicitud.autorizados_disponibles || []).filter((a) => a.puede_firmar)
   const firmas = solicitud.autorizaciones || []
   const completa = solicitud.estado === 'autorizada'
   const requiere2 = solicitud.requiere_segunda_firma
@@ -27,6 +45,10 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
   // Lugares de firma: uno solo con firmante elegido; las viejas muestran el de la segunda.
   const lugares = completa || conFirmante ? (firmas.length ? firmas : [null]) : [...firmas, null]
   const primerUso = elegido && !elegido.tiene_pin
+  // Quien está seleccionado va primero: en las viejas la lista es larga y con scroll.
+  const lista = elegido
+    ? [...disponibles.filter((a) => a.id === elegido.id), ...disponibles.filter((a) => a.id !== elegido.id)]
+    : disponibles
 
   // El PIN es solo numérico: si se tipea otra cosa (letras, o el teclado numérico con
   // Bloq Num apagado) se descarta, pero avisando para que no parezca que el campo no anda.
@@ -43,7 +65,7 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
   }
 
   const elegir = (a) => {
-    setElegido(a); setPin(''); setCodigo(''); setPinNuevo(''); setPinRepetido('')
+    setElegido(a); setEnfocarPin(true); setPin(''); setCodigo(''); setPinNuevo(''); setPinRepetido('')
     setError(''); setAviso('')
   }
 
@@ -168,7 +190,7 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
           {error && !elegido && <div className="alert alert--error">{error}</div>}
 
           <div className="autorizados-lista">
-            {disponibles.map((a) => (
+            {lista.map((a) => (
               <button
                 type="button"
                 key={a.id}
@@ -257,7 +279,7 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
                     <label>PIN de {elegido.nombre}</label>
                     <input
                       className="pin-input" type="password" inputMode="numeric" maxLength={8}
-                      autoFocus value={pin}
+                      autoFocus={enfocarPin} value={pin}
                       onChange={soloDigitos(setPin)}
                       onKeyDown={(e) => e.key === 'Enter' && firmar()}
                     />
