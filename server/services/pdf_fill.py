@@ -298,14 +298,26 @@ def _firmas(ov, solicitud):
         else:
             c.setFillColor(GRIS)
             c.setFont('Helvetica-Oblique', 5.5)
-            c.drawCentredString(centro, ay0 + 22, 'Pendiente de autorización')
+            c.drawCentredString(centro, ay0 + 22, {
+                'rechazada': 'Rechazada',
+                'observada': 'Devuelta para corregir',
+            }.get(solicitud.get('estado'), 'Pendiente de autorización'))
             c.setFillColor(black)
+
+
+def etiqueta_estado(estado):
+    """Estado de la solicitud tal como se imprime en el PDF y en el resumen del ZIP."""
+    return {
+        'autorizada': 'AUTORIZADA',
+        'observada': 'DEVUELTA PARA CORREGIR',
+        'rechazada': 'RECHAZADA',
+    }.get(estado, 'PENDIENTE DE AUTORIZACIÓN')
 
 
 def _pie(ov, solicitud):
     """Nota al pie con el estado y la trazabilidad. Fuera del marco del formulario."""
     c = ov.c
-    estado = 'AUTORIZADA' if solicitud.get('estado') == 'autorizada' else 'PENDIENTE DE AUTORIZACIÓN'
+    estado = etiqueta_estado(solicitud.get('estado'))
     factura = f' · Factura {solicitud["factura_numero"]}' if solicitud.get('factura_numero') else ''
     c.setFillColor(GRIS)
     c.setFont('Helvetica', 5)

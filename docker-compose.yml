@@ -31,6 +31,8 @@ services:
       # Dominio con el que se arman los links de los mails. Sin esto el link sale
       # apuntando a http://backend:5000, que no existe fuera de la red de Docker.
       - PUBLIC_BASE_URL
+      # Recordatorios al firmante (48 h y una semana después). 0 los apaga.
+      - RECORDATORIOS
       # Destinatarios: cajeras por ubicación y razón social (y por razón social sola,
       # para las solicitudes sin ubicación). El mail de cada autorizante está en la
       # base: se carga desde el panel.

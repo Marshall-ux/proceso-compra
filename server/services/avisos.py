@@ -258,7 +258,15 @@ def notificar_cambio_firmante(solicitud, request=None):
     return _mail_para_firmar(solicitud, request)
 
 
-def _mail_para_firmar(solicitud, request=None):
+def notificar_corregida(solicitud, request=None):
+    """Avisa al firmante que corrigieron la solicitud que había devuelto: vuelve a
+    estar pendiente de su firma. Lo dispara la edición de una solicitud observada."""
+    if solicitud.get('estado') != 'pendiente':
+        return 0
+    return _mail_para_firmar(solicitud, request, corregida=True)
+
+
+def _mail_para_firmar(solicitud, request=None, corregida=False):
     destinos = destinatarios_autorizantes(solicitud)
     if not destinos:
         log.info('Solicitud #%s sin destinatarios de aviso configurados', solicitud['id'])
@@ -269,8 +277,19 @@ def _mail_para_firmar(solicitud, request=None):
     monto = fmt_importe(solicitud.get('monto_total'), solicitud.get('moneda'))
     resumen_txt, resumen_html = _resumen(solicitud)
 
+    if corregida:
+        apertura_txt = f'Corrigieron la solicitud #{solicitud["id"]} que habías devuelto para corregir.'
+        apertura_html = (f'Corrigieron la solicitud <strong>#{solicitud["id"]}</strong> que '
+                         'habías devuelto para corregir: ya la podés revisar de nuevo.')
+        asunto = f'Corregida, para autorizar: {proveedor} - {monto}'
+    else:
+        apertura_txt = 'Se cargó un gasto que necesita autorización.'
+        apertura_html = (f'{html.escape(solicitud.get("solicitado_por") or "Un colaborador")} '
+                         'cargó un gasto que necesita tu autorización.')
+        asunto = f'Gasto para autorizar: {proveedor} - {monto}'
+
     texto = (
-        f'Se cargó un gasto que necesita autorización.\n\n'
+        f'{apertura_txt}\n\n'
         f'{resumen_txt}\n\n'
         f'Te eligieron como firmante: sos la única persona que puede autorizarla, '
         f'y la solicitud queda PENDIENTE hasta que la firmes.\n\n'
@@ -279,8 +298,7 @@ def _mail_para_firmar(solicitud, request=None):
     )
     cuerpo = (
         '<p style="margin:0 0 16px; font-size:15px; color:#111827; line-height:1.6;">'
-        f'{html.escape(solicitud.get("solicitado_por") or "Un colaborador")} cargó un gasto '
-        'que necesita tu autorización.</p>'
+        f'{apertura_html}</p>'
         + resumen_html
         + '<p style="margin:0 0 24px; padding:14px 16px; background:#fff7ed; '
           'border-left:3px solid #f59e0b; border-radius:8px; font-size:14px; '
@@ -290,8 +308,53 @@ def _mail_para_firmar(solicitud, request=None):
         + _boton('Ver y autorizar', link, 'Se firma dentro de la app, con tu PIN. ')
     )
     return _enviar_a_cada_uno(
-        destinos, f'Gasto para autorizar: {proveedor} - {monto}',
-        texto, mail_layout('Gasto para autorizar', cuerpo), 'gasto a autorizar')
+        destinos, asunto, texto, mail_layout('Gasto para autorizar', cuerpo), 'gasto a autorizar')
+
+
+def notificar_recordatorio(autorizado, pendientes, request=None):
+    """Recordatorio a un firmante de las solicitudes que siguen esperando su firma
+    (ver services/recordatorios.py). Un solo mail con todas las que le vencieron.
+    `pendientes` es una lista de (solicitud, número de recordatorio: 1 o 2)."""
+    destinos = _lista(autorizado['email'])
+    if not destinos:
+        log.info('Recordatorio de firma sin mail para %s', autorizado['nombre'])
+        return 0
+
+    filas_txt, filas_html = [], []
+    for s, numero in pendientes:
+        monto = fmt_importe(s.get('monto_total'), s.get('moneda'))
+        espera = 'hace más de una semana' if numero == 2 else 'hace más de 48 h'
+        link = _link(s['id'], request)
+        proveedor = s.get('proveedor_nombre') or 'sin proveedor'
+        filas_txt.append(f'- #{s["id"]} {proveedor}, {monto} (espera {espera}): {link}')
+        filas_html.append(
+            '<tr><td style="padding:6px 12px 6px 0; font-size:14px;">'
+            f'<a href="{html.escape(link, quote=True)}" style="color:{APP_COLOR}; font-weight:600;">'
+            f'#{s["id"]}</a></td>'
+            f'<td style="padding:6px 12px 6px 0; font-size:14px; color:#111827;">{html.escape(proveedor)}</td>'
+            f'<td style="padding:6px 12px 6px 0; font-size:14px; white-space:nowrap;">{html.escape(monto)}</td>'
+            f'<td style="padding:6px 0; font-size:13px; color:#6b7280;">espera {espera}</td></tr>')
+
+    n = len(pendientes)
+    asunto = (f'Recordatorio: {n} solicitudes esperan tu firma' if n > 1
+              else f'Recordatorio: la solicitud #{pendientes[0][0]["id"]} espera tu firma')
+    inicio = base_url(request) + '/proceso-compra/'
+    texto = (
+        f'{"Estas solicitudes siguen" if n > 1 else "Esta solicitud sigue"} esperando tu firma:\n\n'
+        + '\n'.join(filas_txt)
+        + f'\n\nSe firman en la app, con tu PIN. En el inicio, "Para firmar" las tiene todas:\n{inicio}\n\n'
+          f'--\nMail automático de {APP_NOMBRE}'
+    )
+    cuerpo = (
+        '<p style="margin:0 0 16px; font-size:15px; color:#111827; line-height:1.6;">'
+        f'{"Estas solicitudes siguen" if n > 1 else "Esta solicitud sigue"} esperando tu firma. '
+        'Hasta que la firmes, el gasto no avanza.</p>'
+        '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px; width:100%;">'
+        + ''.join(filas_html) + '</table>'
+        + _boton('Ir a "Para firmar"', inicio, 'Se firma dentro de la app, con tu PIN. ')
+    )
+    return _enviar_a_cada_uno(destinos, asunto, texto,
+                              mail_layout('Recordatorio de firma', cuerpo), 'recordatorio de firma')
 
 
 def notificar_autorizada(solicitud, request=None):

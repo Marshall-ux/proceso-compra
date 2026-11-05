@@ -65,6 +65,15 @@ export const MONEDAS = [
   { valor: 'USD', etiqueta: 'Dólares (U$S)' },
 ]
 
+// Estados de una solicitud, con la etiqueta y el color de su badge.
+export const ESTADOS = {
+  pendiente: { etiqueta: 'Pendiente', badge: 'warning' },
+  autorizada: { etiqueta: 'Autorizada', badge: 'success' },
+  observada: { etiqueta: 'Observada', badge: 'info' },
+  rechazada: { etiqueta: 'Rechazada', badge: 'danger' },
+}
+export const estadoDe = (estado) => ESTADOS[estado] || ESTADOS.pendiente
+
 // Las solicitudes viejas no tienen moneda: son en pesos.
 export const simboloMoneda = (moneda) => (moneda === 'USD' ? 'U$S' : '$')
 

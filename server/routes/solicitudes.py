@@ -9,9 +9,12 @@ from services import autopack
 from services import avisos
 from services import ordenes_abiertas
 from services import pagos
+from services import revisiones
 from services import solicitudes as svc
 from services.admin import verificar_admin
-from services.autorizacion import ErrorAutorizante, firmar, verificar_autorizante
+from services.autorizacion import (
+    ErrorAutorizante, firmar, motivo_no_pendiente, verificar_autorizante,
+)
 from services.paquete import armar_zip, armar_zip_lote, nombre_zip
 from services.pdf_fill import fmt_money, generar_pdf, generar_pdf_con_facturas
 
@@ -147,6 +150,9 @@ def actualizar(solicitud_id):
     # con varios avisados y quedarse con uno de ellos, esa persona ya tenía el mail.
     if any(i not in previa['avisar_a'] for i in avisar_a):
         _avisar(avisos.notificar_cambio_firmante, solicitud)
+    elif previa['estado'] == 'observada':
+        # La corrigieron: vuelve a firma y el firmante que la devolvió se entera.
+        _avisar(avisos.notificar_corregida, solicitud)
     return jsonify(solicitud)
 
 
@@ -186,8 +192,8 @@ def autorizar(solicitud_id):
     solicitud = svc.obtener(solicitud_id)
     if not solicitud:
         return jsonify({'error': 'La solicitud no existe'}), 404
-    if solicitud['estado'] == 'autorizada':
-        return jsonify({'error': 'La solicitud ya está autorizada'}), 400
+    if solicitud['estado'] != 'pendiente':
+        return jsonify({'error': motivo_no_pendiente(solicitud['estado'])}), 400
 
     conn = get_db()
     try:
@@ -214,6 +220,32 @@ def autorizar(solicitud_id):
         f'$ {fmt_money(tope)}. Queda registrado en el PDF.' if excedio else ''
     )
     return jsonify(resultado)
+
+
+@bp.route('/solicitudes/<int:solicitud_id>/revisar', methods=['POST'])
+def revisar(solicitud_id):
+    """El firmante la devuelve para corregir (accion=observar) o la rechaza
+    (accion=rechazar), con su PIN y un motivo. Ver services/revisiones.py."""
+    data = request.get_json(silent=True) or {}
+    solicitud = svc.obtener(solicitud_id)
+    if not solicitud:
+        return jsonify({'error': 'La solicitud no existe'}), 404
+
+    conn = get_db()
+    try:
+        try:
+            autorizado = verificar_autorizante(conn, data.get('autorizado_id'),
+                                               str(data.get('pin') or ''), solicitud_id)
+        except ErrorAutorizante as e:
+            return jsonify({'error': e.mensaje, **e.extra}), e.codigo
+        ok, error = revisiones.revisar(conn, solicitud, autorizado, data.get('accion'),
+                                       data.get('motivo'))
+        conn.commit()   # aunque no se pueda, el PIN correcto ya reseteó los intentos fallidos
+        if not ok:
+            return jsonify({'error': error}), 400
+    finally:
+        conn.close()
+    return jsonify(_con_disponibles(svc.obtener(solicitud_id)))
 
 
 @bp.route('/solicitudes/autorizar-lote', methods=['POST'])

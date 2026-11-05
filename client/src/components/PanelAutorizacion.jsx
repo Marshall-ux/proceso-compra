@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { LISTAS, fmtFechaHora, fmtImporte, fmtMoney } from '../constants.js'
-import { autorizar, definirPin, quitarAutorizacion } from '../services/api.js'
+import { LISTAS, estadoDe, fmtFechaHora, fmtImporte, fmtMoney } from '../constants.js'
+import { autorizar, definirPin, quitarAutorizacion, revisarSolicitud } from '../services/api.js'
 
 // Quién queda seleccionado al abrir: si una sola persona puede firmar (lo normal, el
 // firmante elegido) o si es quien eligió su nombre en "Soy:" del inicio, va directo al
@@ -33,6 +33,9 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState('')
   const [enviando, setEnviando] = useState(false)
+  // Cuando no está de acuerdo: devolver para corregir ('observar') o rechazar.
+  const [modo, setModo] = useState('')
+  const [motivo, setMotivo] = useState('')
 
   const firmas = solicitud.autorizaciones || []
   const completa = solicitud.estado === 'autorizada'
@@ -62,6 +65,27 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
 
   const limpiar = () => {
     setElegido(null); setPin(''); setCodigo(''); setPinNuevo(''); setPinRepetido(''); setError('')
+    setModo(''); setMotivo('')
+  }
+
+  const revisar = async () => {
+    setError('')
+    if (!motivo.trim()) {
+      return setError(modo === 'observar' ? 'Contá qué hay que corregir' : 'Contá por qué la rechazás')
+    }
+    if (!pin) return setError('Ingresá tu PIN')
+    setEnviando(true)
+    try {
+      const r = await revisarSolicitud(solicitud.id, {
+        autorizado_id: elegido.id, pin, accion: modo, motivo: motivo.trim(),
+      })
+      limpiar()
+      onActualizar(r)
+    } catch (e) {
+      setError(e.data?.mensaje || e.message)
+    } finally {
+      setEnviando(false)
+    }
   }
 
   const elegir = (a) => {
@@ -107,6 +131,24 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
     } finally {
       setEnviando(false)
     }
+  }
+
+  // Devuelta o rechazada: no se firma. El aviso de arriba del detalle dice quién, por qué
+  // y qué hacer.
+  if (solicitud.estado === 'observada' || solicitud.estado === 'rechazada') {
+    const estado = estadoDe(solicitud.estado)
+    return (
+      <div className="card">
+        <div className="card__title">
+          ✍️ Autorización <span className={`badge badge--${estado.badge}`}>{estado.etiqueta}</span>
+        </div>
+        <div className="card__hint" style={{ marginBottom: 0 }}>
+          {solicitud.estado === 'observada'
+            ? 'Está devuelta para corregir: no se puede firmar hasta que la editen.'
+            : 'Está rechazada: no se puede firmar.'}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -273,22 +315,73 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
                     </button>
                   </div>
                 </>
-              ) : (
-                <div className="pin-box">
+              ) : modo ? (
+                <>
                   <div className="field">
-                    <label>PIN de {elegido.nombre}</label>
-                    <input
-                      className="pin-input" type="password" inputMode="numeric" maxLength={8}
-                      autoFocus={enfocarPin} value={pin}
-                      onChange={soloDigitos(setPin)}
-                      onKeyDown={(e) => e.key === 'Enter' && firmar()}
+                    <label>
+                      {modo === 'observar' ? 'Qué hay que corregir' : 'Por qué la rechazás'}{' '}
+                      <span style={{ color: 'var(--danger)' }}>*</span>
+                    </label>
+                    <textarea
+                      autoFocus value={motivo} onChange={(e) => setMotivo(e.target.value)}
+                      placeholder={modo === 'observar'
+                        ? 'Ej: falta el remito, el CUIT no coincide con la factura…'
+                        : 'Ej: no corresponde a esta sucursal, ya se pagó por otra vía…'}
                     />
+                    <div className="field__nota">
+                      {modo === 'observar'
+                        ? 'Vuelve a quien la cargó para que la corrija. Cuando la editen, te llega el aviso para firmarla.'
+                        : 'Es definitivo: una solicitud rechazada no se firma ni se edita, queda como registro.'}
+                    </div>
                   </div>
-                  <button className="btn btn--primary" onClick={firmar} disabled={enviando}>
-                    {enviando ? <span className="spinner" /> : 'Autorizar'}
-                  </button>
-                  <button className="btn btn--ghost" onClick={limpiar}>Cancelar</button>
-                </div>
+                  <div className="pin-box">
+                    <div className="field">
+                      <label>PIN de {elegido.nombre}</label>
+                      <input
+                        className="pin-input" type="password" inputMode="numeric" maxLength={8}
+                        value={pin} onChange={soloDigitos(setPin)}
+                        onKeyDown={(e) => e.key === 'Enter' && revisar()}
+                      />
+                    </div>
+                    <button className={modo === 'rechazar' ? 'btn btn--danger-solid' : 'btn btn--primary'}
+                            onClick={revisar} disabled={enviando}>
+                      {enviando ? <span className="spinner" /> : modo === 'observar' ? 'Devolver' : 'Rechazar'}
+                    </button>
+                    <button className="btn btn--ghost" onClick={() => { setModo(''); setMotivo(''); setError('') }}>
+                      Volver
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="pin-box">
+                    <div className="field">
+                      <label>PIN de {elegido.nombre}</label>
+                      <input
+                        className="pin-input" type="password" inputMode="numeric" maxLength={8}
+                        autoFocus={enfocarPin} value={pin}
+                        onChange={soloDigitos(setPin)}
+                        onKeyDown={(e) => e.key === 'Enter' && firmar()}
+                      />
+                    </div>
+                    <button className="btn btn--primary" onClick={firmar} disabled={enviando}>
+                      {enviando ? <span className="spinner" /> : 'Autorizar'}
+                    </button>
+                    <button className="btn btn--ghost" onClick={limpiar}>Cancelar</button>
+                  </div>
+                  <div className="revisar-otras">
+                    ¿No estás de acuerdo?{' '}
+                    <button type="button" className="btn-link"
+                            onClick={() => { setModo('observar'); setError('') }}>
+                      Devolver para corregir
+                    </button>
+                    {' · '}
+                    <button type="button" className="btn-link btn-link--peligro"
+                            onClick={() => { setModo('rechazar'); setError('') }}>
+                      Rechazar
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           )}

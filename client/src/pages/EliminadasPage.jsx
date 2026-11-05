@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fmtFechaHora, fmtImporte } from '../constants.js'
+import { estadoDe, fmtFechaHora, fmtImporte } from '../constants.js'
 import { listarEliminaciones } from '../services/api.js'
 
 // Historial de solicitudes eliminadas: qué se borró, por qué, quién y cuándo.
@@ -61,9 +61,9 @@ export default function EliminadasPage() {
                     <td>{r.marca}</td>
                     <td className="num">{fmtImporte(r.monto_total, r.moneda)}</td>
                     <td>
-                      {r.estado === 'autorizada'
-                        ? <span className="badge badge--success">Autorizada · {r.firmas}/2</span>
-                        : <span className="badge badge--warning">Pendiente · {r.firmas}/2</span>}
+                      <span className={`badge badge--${estadoDe(r.estado).badge}`}>
+                        {estadoDe(r.estado).etiqueta} · {r.firmas} {r.firmas === 1 ? 'firma' : 'firmas'}
+                      </span>
                     </td>
                     <td style={{ maxWidth: 280 }}>{r.motivo}</td>
                     <td>{r.eliminado_por || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>

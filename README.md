@@ -42,6 +42,16 @@ autorizado elegido la firma digitalmente.
   si lo supera, queda registrado en el PDF y hace falta una segunda de otra persona.
 - **Edición**: si se edita una solicitud ya firmada, las firmas se borran y hay que
   volver a autorizar. Una autorizada no se puede modificar.
+- **Devolver o rechazar**: si el firmante no está de acuerdo, en vez de firmar puede
+  (con su PIN y un motivo obligatorio):
+  - **devolverla para corregir**: queda *Observada*. Cuando alguien la edita vuelve a
+    *Pendiente* y al firmante le llega el aviso de nuevo;
+  - **rechazarla**: queda *Rechazada* para siempre. No se firma ni se edita, sigue en la
+    lista como registro y solo administración la puede eliminar.
+
+  Lo hace el firmante elegido (en las viejas sin firmante, cualquier habilitado). A quien
+  la cargó no le llega mail: la app no tiene su mail. El estado, quién y el motivo se ven
+  en la lista (filtro *Observadas* / *Rechazadas*) y en el detalle.
 
 ## El formulario oficial
 
@@ -165,6 +175,7 @@ npm run dev                   # http://localhost:5173 (proxy /api -> :5000)
 | PUT | `/api/solicitudes/:id` | Edita (borra las firmas existentes) |
 | DELETE | `/api/solicitudes/:id` | Elimina |
 | POST | `/api/solicitudes/:id/autorizar` | Registra una firma (`autorizado_id` + `pin`) |
+| POST | `/api/solicitudes/:id/revisar` | Devuelve (`accion: observar`) o rechaza (`accion: rechazar`), con `autorizado_id`, `pin` y `motivo` |
 | DELETE | `/api/solicitudes/:id/autorizaciones/:aid` | Deshace una firma |
 | GET | `/api/solicitudes/:id/pdf` | Formulario oficial completado |
 | GET | `/api/solicitudes/:id/factura` | Factura original adjunta |
@@ -173,12 +184,22 @@ npm run dev                   # http://localhost:5173 (proxy /api -> :5000)
 
 ## Avisos por mail
 
-Dos avisos automáticos, cada uno en una transición del circuito:
+Avisos automáticos, cada uno en un momento del circuito:
 
 | Cuándo | A quién | Qué dice |
 |---|---|---|
 | Se carga un gasto (queda **pendiente**) | Solo el firmante que eligió quien cargó el gasto | Hay una AGC esperando su firma; el gasto no avanza hasta que alguien autorice |
+| Se cambia el firmante, o se corrige una que había **devuelto** | El firmante (el nuevo, o el que la devolvió) | La tiene para firmar |
+| Pasan **48 h** sin firmarla, y otra vez **una semana** después de ese recordatorio | El firmante | Recordatorio. Ahí se corta: son tres mails como máximo |
 | La última firma la deja **autorizada** | La cajera de cada razón social imputada, según la ubicación (Rosario / Santa Fe) | Ya se puede gestionar el pago |
+
+Los **recordatorios** (`server/services/recordatorios.py`) los revisa la propia app cada
+15 minutos; no hace falta un cron. Salen solo en días hábiles de 8 a 18 (si el plazo se
+cumple de noche o un fin de semana, sale el próximo día hábil a las 8; los feriados no se
+contemplan). Cuentan desde que le toca firmar a la persona actual (el alta, el cambio de
+firmante o la corrección). Si a alguien le vencen varias juntas, recibe **un solo mail**
+con todas. No se le recuerda a nadie algo que no puede firmar (de baja, otra marca o tope
+insuficiente), ni las viejas sin firmante elegido.
 
 Reglas de la implementación (`server/services/avisos.py`):
 
@@ -210,6 +231,7 @@ y testear sin cuenta de mail.
 | `MAIL_FROM_NOMBRE` | Nombre del remitente. Normalmente igual a `APP_NOMBRE`. |
 | `MAIL_REPLY_TO` | A dónde van las respuestas. Sin definir, no se manda. |
 | `PUBLIC_BASE_URL` | Dominio con el que se arman los links (`http://192.168.41.39`). **Obligatorio en Docker**: detrás de nginx el request dice `backend:5000`. |
+| `RECORDATORIOS` | `0` apaga los recordatorios (por ejemplo, en una copia de prueba con mail de verdad). Sin definir, están prendidos. |
 | `CAJA_<UBICACION>_<EMPRESA>` (ej. `CAJA_SANTA_FE_HIKARI`, `CAJA_ROSARIO_ALCO_ROSARIO`) | Cajera de cada razón social en cada ubicación, para el aviso de autorizada. |
 | `CAJA_ALCO_ROSARIO`, `CAJA_NEOSTAR`, `CAJA_XINOXIA`, `CAJA_DASEOS`, `CAJA_HIKARI` | Cajera por razón social sola: para solicitudes sin ubicación (cargadas antes de que existiera) y razones sociales sin cajera por sede. |
 

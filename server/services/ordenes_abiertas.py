@@ -70,8 +70,8 @@ def cambiar_tipo(conn, solicitud, autorizado, tipo, duracion):
     al editar). Devuelve (ok, error)."""
     if autorizado['nombre'] not in HABILITADOS_TIPO_ORDEN:
         return False, f'{autorizado["nombre"]} no está habilitado para cambiar el tipo de orden'
-    if solicitud['estado'] == 'autorizada':
-        return False, 'La solicitud ya está autorizada: el tipo de orden no se puede cambiar'
+    if solicitud['estado'] != 'pendiente':
+        return False, 'Solo se puede cambiar el tipo de orden de una solicitud pendiente de firma'
     if tipo not in TIPOS:
         return False, 'Tipo de orden inválido'
     duracion = str(duracion or '').strip()
