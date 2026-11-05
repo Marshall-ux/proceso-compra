@@ -1,0 +1,3 @@
+# Los scripts que corren en el servidor (Linux) tienen que tener fin de línea LF: con el
+# CRLF de Windows, sh no los puede ejecutar.
+*.sh text eol=lf

@@ -28,8 +28,7 @@ def _avisar(fn, solicitud):
     except Exception:
         log.exception('Fallo el aviso por mail de la solicitud #%s', solicitud.get('id'))
 
-GENERADOS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'generated')
-UPLOADS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
+UPLOADS =os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
 
 
 def _con_disponibles(solicitud):
@@ -393,10 +392,7 @@ def pdf(solicitud_id):
     if not solicitud:
         return jsonify({'error': 'La solicitud no existe'}), 404
 
-    os.makedirs(GENERADOS, exist_ok=True)
-    destino = os.path.join(GENERADOS, f'autorizacion-{solicitud_id}.pdf')
-    generar_pdf(solicitud, destino)
-    return send_file(destino, mimetype='application/pdf', as_attachment=False,
+    return send_file(generar_pdf(solicitud), mimetype='application/pdf', as_attachment=False,
                      download_name=f'Autorizacion-Generica-{solicitud_id}.pdf')
 
 
@@ -407,19 +403,14 @@ def pdf_completo(solicitud_id):
     if not solicitud:
         return jsonify({'error': 'La solicitud no existe'}), 404
 
-    os.makedirs(GENERADOS, exist_ok=True)
-    autorizacion = os.path.join(GENERADOS, f'autorizacion-{solicitud_id}.pdf')
-    generar_pdf(solicitud, autorizacion)
-
     rutas = []
     for f in solicitud['facturas']:
         ruta = os.path.normpath(os.path.join(UPLOADS, f['archivo'] or ''))
         if ruta.startswith(os.path.normpath(UPLOADS)) and os.path.exists(ruta):
             rutas.append((f['nombre'], ruta))
 
-    destino = os.path.join(GENERADOS, f'autorizacion-completa-{solicitud_id}.pdf')
-    generar_pdf_con_facturas(autorizacion, rutas, destino)
-    return send_file(destino, mimetype='application/pdf', as_attachment=False,
+    completo, _ = generar_pdf_con_facturas(generar_pdf(solicitud), rutas)
+    return send_file(completo, mimetype='application/pdf', as_attachment=False,
                      download_name=f'Autorizacion-{solicitud_id}-con-facturas.pdf')
 
 

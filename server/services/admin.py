@@ -14,13 +14,17 @@ from flask import jsonify, request
 
 CLAVE_DEFAULT = 'neostar-admin'
 
+# Claves de ejemplo que no protegen nada: la del código y la que pone el compose cuando
+# el .env no define ADMIN_PASSWORD. Con cualquiera de las dos, el panel avisa.
+CLAVES_DE_EJEMPLO = {CLAVE_DEFAULT, 'cambiar-esta-clave'}
+
 
 def clave_actual():
     return os.environ.get('ADMIN_PASSWORD') or CLAVE_DEFAULT
 
 
 def usando_default():
-    return not os.environ.get('ADMIN_PASSWORD')
+    return clave_actual() in CLAVES_DE_EJEMPLO
 
 
 def verificar_admin(clave):

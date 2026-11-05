@@ -16,9 +16,8 @@ dist/
 server/uploads/*
 !server/uploads/.gitkeep
 
-# PDFs generados
-server/generated/*
-!server/generated/.gitkeep
+# PDFs generados: ya no se guardan (se arman en memoria). Se ignora por las copias viejas.
+server/generated/
 
 # IDE
 .vscode/

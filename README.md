@@ -22,7 +22,7 @@ autorizado elegido la firma digitalmente.
 - **Frontend**: React + Vite (JavaScript), CSS vanilla (estética Neostar, tema claro)
 - **Backend**: Python 3.12 + Flask, pdfplumber (lectura), pypdf + reportlab (llenado)
 - **Base de datos**: SQLite
-- **Despliegue**: Docker (backend Flask + frontend Nginx)
+- **Despliegue**: Docker (backend Flask servido con waitress + frontend Nginx), hora de Argentina
 
 ## Reglas del proceso
 
@@ -69,22 +69,70 @@ client/          Frontend React + Vite
 server/          Backend Flask (routes, services, models)
   assets/        Formulario oficial F 8.4-01 + logo
   services/      extractor.py (lee facturas) · pdf_fill.py (completa el formulario)
+  tests/         Tests (python -m unittest discover tests, desde server/)
 docs/            Documentación fuente (formulario, planillas de autorizados, factura ejemplo)
+scripts/         backup.sh (backup diario de la base y los adjuntos, ver "Backups")
 ```
 
-## Desarrollo con Docker (recomendado)
+## Docker (como en producción)
 
-Requiere Docker Desktop corriendo.
+`docker compose` levanta la app igual que en el servidor: el backend con **waitress**
+(servidor de producción, sin modo debug ni recarga automática), con el código dentro de
+la imagen y la hora de Argentina. Para desarrollar con recarga automática, ver
+*Desarrollo local*.
 
 ```bash
-docker-compose up --build      # construir y levantar
-docker-compose up -d           # en segundo plano
-docker-compose down            # detener
-docker-compose logs -f backend # ver logs del backend
+docker compose up -d --build     # construir y levantar
+docker compose logs -f backend   # ver logs del backend
+docker compose down              # detener
 ```
 
 - Frontend: http://localhost:8092/proceso-compra/
 - Backend API: http://localhost:8092/proceso-compra/api
+
+## Desplegar
+
+En el servidor, en `/opt/portal/portal-interno/proceso-compra`:
+
+```bash
+scripts/backup.sh               # backup de la base y los adjuntos antes de tocar nada
+git pull
+docker compose up -d --build    # reconstruye backend y frontend y los reinicia
+```
+
+El código va **dentro de la imagen**: sin el `--build` sigue corriendo la versión
+anterior. (Hasta nov-2026 alcanzaba con `git pull`, porque el backend corría en modo
+desarrollo con el código montado desde la carpeta.) La base y los adjuntos no se tocan:
+viven en el volumen `sqlite_data` y en `server/uploads/`.
+
+## Backups
+
+`scripts/backup.sh` deja todo en `/opt/portal/portal-interno/proceso-compra-backups/automaticos/`:
+
+- **Base** (`base/`): copia en caliente con la API de backup de SQLite, así queda
+  consistente aunque alguien esté firmando en ese momento. Se verifica, se comprime y se
+  guardan las de los últimos **30 días**.
+- **Adjuntos** (`adjuntos/`): espejo de `server/uploads/`. Solo copia los nuevos y nunca
+  borra nada, así un adjunto eliminado en la app sigue estando en el backup.
+
+Corre todos los días a las 3 de la mañana con el cron del usuario que despliega
+(`crontab -e`). El servidor está en UTC, así que las 3 de Argentina son las 6:
+
+```
+0 6 * * * /opt/portal/portal-interno/proceso-compra/scripts/backup.sh >> /opt/portal/portal-interno/proceso-compra-backups/backup.log 2>&1
+```
+
+No copiar `app.db` a mano con la app andando: puede quedar a medio escribir. Para un
+backup en el momento, correr el script.
+
+**Restaurar** una copia (reemplaza la base actual: hacer antes un backup de esa):
+
+```bash
+docker compose stop backend
+gunzip -c ../proceso-compra-backups/automaticos/base/app-AAAAMMDD-HHMM.db.gz > /tmp/app.db
+docker cp /tmp/app.db proceso-compra-backend-1:/app/data/app.db
+docker compose start backend
+```
 
 ## Desarrollo local (sin Docker)
 
@@ -244,3 +292,8 @@ al reiniciar se sincronizan cargos, montos y conceptos sin borrar los PIN.
   el acto de autorizar, que es lo que tiene consecuencia.
 - Las facturas escaneadas (sin capa de texto) no se pueden leer: la app lo avisa y
   permite cargar los datos a mano.
+- **Horas**: desde nov-2026 el contenedor usa la hora de Argentina. Lo guardado antes
+  (firmas, cargas, Autopack, eliminaciones) quedó en UTC, con 3 h de más, y se decidió
+  no corregirlo.
+- Los PDF (autorización, autorización + facturas, ZIP) se arman en memoria en cada
+  pedido; no se guardan en disco.
