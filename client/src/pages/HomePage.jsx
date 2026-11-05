@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import PanelLote from '../components/PanelLote.jsx'
 import robot from '../assets/robot-id.png'
-import { EMPRESAS, LISTAS, fmtFechaHora, fmtImporte } from '../constants.js'
+import { EMPRESAS, LISTAS, esperaDesde, fmtFechaHora, fmtImporte } from '../constants.js'
 import {
   cerrarSesionAutopack, iniciarSesionAutopack, listarAutorizados, listarSolicitudes,
   marcarAutopack, paraFirmar, sesionAutopack, urlZipLote,
@@ -22,6 +22,9 @@ export default function HomePage() {
   const [autorizados, setAutorizados] = useState([])
   const [firmante, setFirmante] = useState(() => localStorage.getItem('firmante') || '')
   const [misFirmas, setMisFirmas] = useState([])
+  // Firmar todas las de "Para firmar" de una vez, con un solo PIN.
+  const [firmandoLote, setFirmandoLote] = useState(false)
+  const [avisoLote, setAvisoLote] = useState('')
 
   useEffect(() => { listarAutorizados().then(setAutorizados).catch(() => {}) }, [])
 
@@ -38,6 +41,8 @@ export default function HomePage() {
 
   const elegirFirmante = (id) => {
     setFirmante(id)
+    setFirmandoLote(false)
+    setAvisoLote('')
     if (id) localStorage.setItem('firmante', id)
     else localStorage.removeItem('firmante')
   }
@@ -122,8 +127,7 @@ export default function HomePage() {
     setAutopack(null)
   }
 
-  const elegidas = solicitudes.filter((s) => seleccion.includes(s.id))
-  const pendientesElegidas = elegidas.filter((s) => s.estado !== 'autorizada')
+  const persona = autorizados.find((a) => String(a.id) === String(firmante))
 
   return (
     <>
@@ -161,8 +165,16 @@ export default function HomePage() {
             </div>
           ) : (
             <>
-              <div className="card__hint">
-                Tenés <strong>{misFirmas.length}</strong> para firmar:
+              <div className="firmante-card__top" style={{ marginTop: '0.6rem' }}>
+                <div className="card__hint" style={{ marginBottom: 0 }}>
+                  Tenés <strong>{misFirmas.length}</strong> para firmar:
+                </div>
+                {misFirmas.length > 1 && !firmandoLote && persona && (
+                  <button className="btn btn--primary btn--sm"
+                          onClick={() => { setFirmandoLote(true); setAvisoLote('') }}>
+                    ✍️ Firmar las {misFirmas.length}
+                  </button>
+                )}
               </div>
               <div className="para-firmar-lista">
                 {misFirmas.map((s) => (
@@ -180,6 +192,10 @@ export default function HomePage() {
                     {s.criticidad === 'urgente' && (
                       <span className="badge badge--danger">Urgente</span>
                     )}
+                    {(() => {
+                      const e = esperaDesde(s.created_at)
+                      return <span className={`espera ${e.demorada ? 'espera--demorada' : ''}`}>{e.texto}</span>
+                    })()}
                     <span className="para-firmar-item__monto">{fmtImporte(s.monto_total, s.moneda)}</span>
                     {s.requiere_segunda_firma && (
                       <span className="badge badge--warning">falta 2ª firma</span>
@@ -187,9 +203,21 @@ export default function HomePage() {
                   </button>
                 ))}
               </div>
+              {firmandoLote && persona && (
+                <PanelLote
+                  solicitudes={misFirmas} persona={persona}
+                  onCancelar={() => setFirmandoLote(false)}
+                  onListo={(res) => {
+                    setAvisoLote(res.resumen)
+                    if (!(res.salteadas || []).length) setFirmandoLote(false)
+                    cargar()
+                  }}
+                />
+              )}
             </>
           )
         )}
+        {avisoLote && <div className="alert alert--ok" style={{ marginTop: '0.9rem', marginBottom: 0 }}>{avisoLote}</div>}
       </div>
 
       <div className="card">
@@ -247,17 +275,6 @@ export default function HomePage() {
           </div>
         )}
 
-        {pendientesElegidas.length > 0 && (
-          <PanelLote
-            solicitudes={pendientesElegidas}
-            onListo={(res) => {
-              setMensaje({ tipo: 'ok', texto: res.resumen })
-              setSeleccion([])
-              cargar()
-            }}
-          />
-        )}
-
         {cargando ? (
           <div className="empty"><span className="spinner spinner--dark" /> Cargando…</div>
         ) : solicitudes.length === 0 ? (
@@ -285,7 +302,7 @@ export default function HomePage() {
                   <th>Proveedor</th>
                   <th>Marca</th>
                   <th className="num">Monto</th>
-                  <th>Firmas</th>
+                  <th>Firmante</th>
                   <th>Estado</th>
                   <th title="Cargado en Autopack">Autopack</th>
                 </tr>
@@ -326,9 +343,18 @@ export default function HomePage() {
                     </td>
                     <td className="num">{fmtImporte(s.monto_total, s.moneda)}</td>
                     <td>
-                      <span className={`badge ${s.estado === 'autorizada' ? 'badge--success' : 'badge--muted'}`}>
-                        {s.firmas} {s.firmas === 1 ? 'firma' : 'firmas'}
-                      </span>
+                      {s.estado === 'autorizada' ? (
+                        <span style={{ fontSize: '0.85rem' }}>✓ {s.firmado_por || '—'}</span>
+                      ) : (() => {
+                        // A quién espera y desde cuándo: el que la frena tiene nombre.
+                        const e = esperaDesde(s.created_at)
+                        return (
+                          <>
+                            {s.firmante || <span style={{ color: 'var(--text-muted)' }}>Cualquier habilitado</span>}
+                            <div className={`espera ${e.demorada ? 'espera--demorada' : ''}`}>esperando {e.texto}</div>
+                          </>
+                        )
+                      })()}
                     </td>
                     <td>
                       {s.estado === 'autorizada'

@@ -508,6 +508,18 @@ table.data { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .visor { width: 100%; height: 780px; border: 1px solid var(--border); border-radius: var(--radius); }
 .link-factura { font-size: 0.85rem; font-weight: 600; }
 
+/* ----------------------------- resumen ---------------------------------- */
+.resumen__monto { display: flex; flex-direction: column; margin-bottom: 1rem; }
+.resumen__monto strong { font-size: 1.6rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.resumen__lab { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); }
+.resumen__extra { font-size: 0.8rem; color: var(--text-muted); }
+.resumen__datos { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.8rem 1.4rem; }
+.resumen__dato dd { margin: 0.1rem 0 0; }
+
+/* Quién firma y desde cuándo espera (lista e inicio). */
+.espera { font-size: 0.75rem; color: var(--text-muted); }
+.espera--demorada { color: var(--warning); font-weight: 700; }
+
 @media (max-width: 860px) {
   .grid--2, .grid--3, .firmas { grid-template-columns: 1fr; }
 }
@@ -516,4 +528,19 @@ table.data { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
   .hero__title { font-size: 2.2rem; }
   .header__banner { height: 36px; }
   .main { padding: 1.5rem 1rem 3rem; }
+  /* El logo y los 4 links en una fila eran más anchos que el celular y toda la página
+     quedaba cortada a la derecha. */
+  .header__bar { flex-wrap: wrap; padding: 0.7rem 1rem; gap: 0.5rem; }
+  .header__nav { flex-wrap: wrap; }
+  .navlink { padding: 0.4rem 0.75rem; font-size: 0.88rem; }
+  /* En el celular lo primero tiene que ser "Para firmar", no el robot. */
+  .hero__robot { display: none; }
+  .firmante-select { width: 100%; }
+  .firmante-select select { flex: 1; min-width: 0; }
+  /* Renglón de "Para firmar": proveedor arriba, urgencia/espera/monto abajo. */
+  .para-firmar-item { flex-wrap: wrap; row-gap: 0.3rem; }
+  .para-firmar-item__prov { flex-basis: calc(100% - 3rem); }
+  .para-firmar-item__monto { margin-left: auto; }
+  .pin-box { flex-wrap: wrap; }
+  .pin-box .field { flex-basis: 100%; }
 }
