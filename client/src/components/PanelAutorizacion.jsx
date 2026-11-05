@@ -94,7 +94,10 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
         {completa
           ? 'Autorizada. El PDF ya está disponible.'
           : requiere2
-            ? <>El monto <strong>supera el tope</strong> de {firmas[0]?.nombre}: necesita una <strong>segunda firma</strong> de otra persona.</>
+            ? trabada
+              // Con firmante único nadie más puede dar la 2ª firma: el aviso de abajo dice cómo destrabarla.
+              ? <>El monto <strong>supera el tope</strong> de {firmas[0]?.nombre}: con su firma no alcanza.</>
+              : <>El monto <strong>supera el tope</strong> de {firmas[0]?.nombre}: necesita una <strong>segunda firma</strong> de otra persona.</>
             : conFirmante
               ? <>Solo puede firmarla <strong>{solicitud.avisados?.join(', ') || 'el firmante elegido'}</strong>, que es a quien eligieron al cargarla.</>
               : <>Con una firma <strong>dentro del tope</strong> del autorizante queda autorizada. Si el monto supera su tope, hará falta una segunda.</>}
