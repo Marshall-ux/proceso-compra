@@ -124,6 +124,15 @@ export const autorizar = (id, payload) =>
     body: JSON.stringify(payload),
   })
 
+// El firmante la devuelve para corregir (accion 'observar') o la rechaza ('rechazar'),
+// con su PIN y un motivo.
+export const revisarSolicitud = (id, payload) =>
+  pedir(`/solicitudes/${id}/revisar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
 export const quitarAutorizacion = (id, autorizacionId) =>
   pedir(`/solicitudes/${id}/autorizaciones/${autorizacionId}`, { method: 'DELETE' })
 
