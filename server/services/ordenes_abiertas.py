@@ -6,8 +6,7 @@ solicitud nueva, se duplica la orden: por eso al guardar se buscan órdenes abie
 mismo proveedor (CUIT), marca y concepto, y se pregunta si es la misma.
 """
 
-import re
-
+from services.cuit import solo_digitos
 from services.solicitudes import marcas_de
 
 # Quiénes pueden cambiar una solicitud pendiente a orden abierta o cerrada, con su PIN.
@@ -15,10 +14,6 @@ from services.solicitudes import marcas_de
 HABILITADOS_TIPO_ORDEN = ('Raul Garcia',)
 
 TIPOS = ('abierta', 'cerrada')
-
-
-def solo_digitos(cuit):
-    return re.sub(r'\D', '', str(cuit or ''))
 
 
 def similares(conn, cuit, marcas, concepto, excluir_id=None):

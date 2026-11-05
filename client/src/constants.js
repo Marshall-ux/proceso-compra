@@ -115,6 +115,23 @@ export const esperaDesde = (creada) => {
   return { texto, demorada: hoy - desde >= 48 * 36e5 }
 }
 
+// CUIT: 11 números y el último es el verificador (módulo 11). El servidor valida lo mismo.
+export const cuitValido = (cuit) => {
+  const d = String(cuit || '').replace(/\D/g, '')
+  if (d.length !== 11) return false
+  const pesos = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2]
+  const resto = pesos.reduce((acc, p, i) => acc + p * Number(d[i]), 0) % 11
+  const verificador = resto === 0 ? 0 : 11 - resto
+  return verificador !== 10 && verificador === Number(d[10])
+}
+
+// Lleva la pantalla al primer campo marcado con error (o arriba, si no hay ninguno).
+export const irAlPrimerError = () => {
+  const primero = document.querySelector('[data-error="si"]')
+  if (primero) primero.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  else window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 // '2026-07-16 14:01:37' -> '16/07/2026 14:01'
 export const fmtFechaHora = (v) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2})/.exec(String(v || ''))
