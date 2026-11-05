@@ -9,6 +9,7 @@ from services import autopack
 from services import avisos
 from services import ordenes_abiertas
 from services import pagos
+from services import proveedores
 from services import revisiones
 from services import solicitudes as svc
 from services.admin import verificar_admin
@@ -32,6 +33,19 @@ def _avisar(fn, solicitud):
         log.exception('Fallo el aviso por mail de la solicitud #%s', solicitud.get('id'))
 
 UPLOADS =os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
+
+
+def _invalida(errores_campos, errores_aviso):
+    """400 con los errores: la lista y, por campo, el primero de cada uno (la pantalla
+    los muestra al lado de su campo y lleva al primero)."""
+    campos = {}
+    for campo, mensaje in errores_campos:
+        campos.setdefault(campo, mensaje)
+    if errores_aviso:
+        campos.setdefault('avisar_a', errores_aviso[0])
+    return jsonify({'error': 'Faltan datos obligatorios',
+                    'errores': [m for _, m in errores_campos] + errores_aviso,
+                    'campos': campos}), 400
 
 
 def _con_disponibles(solicitud):
@@ -77,6 +91,13 @@ def abiertas_similares():
         conn.close()
 
 
+@bp.route('/proveedores/<cuit>', methods=['GET'])
+def proveedor(cuit):
+    """Datos de un proveedor tomados de sus solicitudes anteriores (por CUIT): el alta
+    los completa solos."""
+    return jsonify(proveedores.datos_previos(cuit))
+
+
 @bp.route('/solicitudes/<int:solicitud_id>/tipo-orden', methods=['POST'])
 def cambiar_tipo_orden(solicitud_id):
     """Pasa una solicitud pendiente a orden abierta o cerrada. Solo los habilitados
@@ -107,11 +128,10 @@ def cambiar_tipo_orden(solicitud_id):
 @bp.route('/solicitudes', methods=['POST'])
 def crear():
     data = request.get_json(silent=True) or {}
-    errores = svc.validar(data)
+    errores_campos = svc.validar_campos(data)
     avisar_a, errores_aviso = svc.validar_avisar_a(data)
-    errores += errores_aviso
-    if errores:
-        return jsonify({'error': 'Faltan datos obligatorios', 'errores': errores}), 400
+    if errores_campos or errores_aviso:
+        return _invalida(errores_campos, errores_aviso)
     solicitud_id = svc.crear(data, data.get('items', []), data.get('facturas', []), avisar_a)
     # El gasto nace pendiente: recien ACA, ya persistido, se avisa a los autorizantes.
     solicitud = svc.obtener(solicitud_id)
@@ -136,11 +156,10 @@ def actualizar(solicitud_id):
     previa = svc.obtener(solicitud_id)
     if not previa:
         return jsonify({'error': 'La solicitud no existe'}), 404
-    errores = svc.validar(data)
+    errores_campos = svc.validar_campos(data)
     avisar_a, errores_aviso = svc.validar_avisar_a(data)
-    errores += errores_aviso
-    if errores:
-        return jsonify({'error': 'Faltan datos obligatorios', 'errores': errores}), 400
+    if errores_campos or errores_aviso:
+        return _invalida(errores_campos, errores_aviso)
     ok, error = svc.actualizar(solicitud_id, data, data.get('items', []), data.get('facturas'),
                                avisar_a=avisar_a)
     if not ok:

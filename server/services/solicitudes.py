@@ -1,8 +1,10 @@
 """Logica de negocio de las solicitudes (autorizaciones genericas)."""
 
 import json
+from datetime import datetime
 
 from models.database import get_db
+from services import cuit as cuit_svc
 from services import moneda as mon
 from services.marcas import UBICACIONES, listas_habilitadas
 from services.pins import esta_bloqueado
@@ -33,11 +35,6 @@ CAMPOS_FLOAT = {'monto_total', 'tipo_cambio'}
 CAMPOS_INT = set()
 
 CRITICIDADES = ('urgente', 'informado', 'otro')
-
-# Campos sin los que el formulario no tiene sentido enviar a autorizar.
-OBLIGATORIOS = ('fecha', 'proveedor_nombre', 'proveedor_tipo', 'tipo_orden',
-                'concepto', 'solicitado_por', 'criticidad')
-
 
 def _fila_a_dict(row):
     return {k: row[k] for k in row.keys()}
@@ -89,6 +86,7 @@ def _normalizar(datos):
         'marca': marcas[0] if marcas else '',
         'forma_pago': ','.join(formas_pago(datos.get('forma_pago'))),
         'moneda': mon.normalizar(datos.get('moneda')),
+        'cuit': cuit_svc.formatear(datos.get('cuit')),
         # En pesos el tipo de cambio no aplica: no queda uno viejo si se pasó de USD a ARS.
         'tipo_cambio': (mon.tipo_cambio(datos.get('tipo_cambio'))
                         if mon.normalizar(datos.get('moneda')) == 'USD' else 0),
@@ -108,44 +106,86 @@ def _valor(campo, datos):
     return bruto if bruto is not None else ''
 
 
-def validar(datos):
-    """Devuelve lista de errores legibles."""
+def _vacio(datos, campo):
+    return not str(datos.get(campo) or '').strip()
+
+
+def validar_campos(datos):
+    """Errores de la solicitud como (campo, mensaje), en el orden del formulario: la
+    pantalla muestra cada uno al lado de su campo y lleva al primero."""
     errores = []
-    for campo in OBLIGATORIOS:
-        if not str(datos.get(campo) or '').strip():
-            errores.append(f'Falta completar: {campo.replace("_", " ")}')
-    empresas = lista_multi(datos, 'empresas', 'empresa')
+
+    def falta(campo, mensaje):
+        errores.append((campo, mensaje))
+
+    fecha = str(datos.get('fecha') or '').strip()
+    if not fecha:
+        falta('fecha', 'Falta la fecha de la factura')
+    else:
+        try:
+            datetime.strptime(fecha, '%d/%m/%Y')
+        except ValueError:
+            falta('fecha', 'La fecha tiene que ser dd/mm/aaaa (por ejemplo, 05/11/2026)')
+    if not lista_multi(datos, 'empresas', 'empresa'):
+        falta('empresas', 'Seleccioná al menos una empresa a la que imputar el pago')
     marcas = lista_multi(datos, 'marcas', 'marca')
-    if not empresas:
-        errores.append('Seleccioná al menos una empresa a la que imputar el pago')
     if not marcas:
-        errores.append('Seleccioná al menos una marca')
+        falta('marcas', 'Seleccioná al menos una marca')
+    elif 'OTRO' in marcas and _vacio(datos, 'marca_otro'):
+        falta('marca_otro', 'Indicá cuál es la marca en "Otro"')
     # Sin ubicación no se sabe a qué cajera avisar cuando quede autorizada.
-    if not str(datos.get('ubicacion') or '').strip():
-        errores.append('Elegí la ubicación (Rosario o Santa Fe)')
+    if _vacio(datos, 'ubicacion'):
+        falta('ubicacion', 'Elegí la ubicación (Rosario o Santa Fe)')
     elif datos.get('ubicacion') not in UBICACIONES:
-        errores.append('Ubicación inválida')
-    if float(datos.get('monto_total') or 0) <= 0:
-        errores.append('El monto presupuesto final debe ser mayor a cero')
+        falta('ubicacion', 'Ubicación inválida')
+
+    if _vacio(datos, 'proveedor_tipo'):
+        falta('proveedor_tipo', 'Indicá si el proveedor es habitual o nuevo')
+    if _vacio(datos, 'proveedor_nombre'):
+        falta('proveedor_nombre', 'Falta el nombre del proveedor')
+    if _vacio(datos, 'cuit'):
+        falta('cuit', 'Falta el CUIT del proveedor')
+    elif not cuit_svc.es_valido(datos.get('cuit')):
+        falta('cuit', 'El CUIT no es válido: revisá los números (el último no coincide)')
+    if _vacio(datos, 'tipo_orden'):
+        falta('tipo_orden', 'Indicá si es una orden abierta o cerrada')
+    elif datos.get('tipo_orden') == 'abierta' and _vacio(datos, 'duracion_orden'):
+        falta('duracion_orden', 'Indicá la duración de la orden abierta')
+    if datos.get('proveedor_tipo') == 'nuevo' and _vacio(datos, 'legajo_archivo'):
+        falta('legajo_archivo', 'Al ser un proveedor nuevo, hay que adjuntar el legajo impositivo (PDF)')
+
+    if _vacio(datos, 'criticidad'):
+        falta('criticidad', 'Elegí qué tan urgente es el pago (criticidad)')
+    elif datos.get('criticidad') not in CRITICIDADES:
+        falta('criticidad', 'Criticidad inválida')
+    elif datos.get('criticidad') == 'otro' and _vacio(datos, 'criticidad_obs'):
+        falta('criticidad_obs', 'Indicá el detalle de la criticidad en "Otro"')
+    if _vacio(datos, 'concepto'):
+        falta('concepto', 'Elegí el concepto del pago')
+    elif datos.get('concepto') == 'otros' and _vacio(datos, 'concepto_otro'):
+        falta('concepto_otro', 'Indicá cuál es el concepto en "Otros"')
+
+    try:
+        monto = float(datos.get('monto_total') or 0)
+    except (TypeError, ValueError):
+        monto = 0
+    if monto <= 0:
+        falta('monto_total', 'El monto presupuesto final debe ser mayor a cero')
     if str(datos.get('moneda') or 'ARS').strip().upper() not in mon.MONEDAS:
-        errores.append('Moneda inválida')
+        falta('moneda', 'Moneda inválida')
     elif mon.normalizar(datos.get('moneda')) == 'USD' and mon.tipo_cambio(datos.get('tipo_cambio')) <= 0:
-        errores.append('En dólares hace falta el tipo de cambio (para comparar con los topes en pesos)')
-    if 'OTRO' in marcas and not str(datos.get('marca_otro') or '').strip():
-        errores.append('Indicá cuál es la marca en "Otro"')
-    if datos.get('concepto') == 'otros' and not str(datos.get('concepto_otro') or '').strip():
-        errores.append('Indicá cuál es el concepto en "Otros"')
-    if datos.get('tipo_orden') == 'abierta' and not str(datos.get('duracion_orden') or '').strip():
-        errores.append('Indicá la duración de la orden abierta')
+        falta('tipo_cambio', 'En dólares hace falta el tipo de cambio (para comparar con los topes en pesos)')
     if ('transferencia' in formas_pago(datos.get('forma_pago'))
-            and not str(datos.get('cbu') or '').strip()
-            and not str(datos.get('cbu_imagen') or '').strip()):
-        errores.append('Para transferencia hace falta el CBU (número o imagen)')
-    if datos.get('criticidad') and datos.get('criticidad') not in CRITICIDADES:
-        errores.append('Criticidad inválida')
-    if datos.get('criticidad') == 'otro' and not str(datos.get('criticidad_obs') or '').strip():
-        errores.append('Indicá el detalle de la criticidad en "Otro"')
+            and _vacio(datos, 'cbu') and _vacio(datos, 'cbu_imagen')):
+        falta('cbu', 'Para transferencia hace falta el CBU (número o imagen)')
+    if _vacio(datos, 'solicitado_por'):
+        falta('solicitado_por', 'Falta quién solicita la compra o contratación')
     return errores
+
+
+def validar(datos):
+    """Los errores de `validar_campos`, solo los mensajes."""
+    return [mensaje for _, mensaje in validar_campos(datos)]
 
 
 def crear(datos, items, facturas=None, avisar_a=None):

@@ -9,9 +9,13 @@ autorizado elegido la firma digitalmente.
 
 1. **Subir factura** — se lee el PDF y se extraen proveedor, CUIT, fecha, importes,
    condiciones de pago, contacto y el detalle de ítems.
-2. **Revisar y completar** — los campos leídos de la factura se muestran resaltados.
-   El empleado completa lo que la factura no dice (marca, ubicación, concepto, tipo de
-   orden, quién solicita) y elige **un firmante**, que recibe el aviso por mail.
+2. **Revisar y completar** — los campos leídos de la factura se muestran en verde. Con el
+   CUIT, si el proveedor ya tiene solicitudes, se completan solos los datos vacíos
+   (nombre, contacto, legajo, y el CBU si se elige transferencia), también en verde. El
+   empleado completa lo que falta (marca, ubicación, concepto, tipo de orden, quién
+   solicita) y elige **un firmante**, que recibe el aviso por mail. Los obligatorios
+   tienen `*`; si falta algo, se marca en rojo debajo de cada campo y la pantalla lleva al
+   primero. "Solicitado por" y la ubicación quedan recordados en el navegador.
 3. **Autorizar** — el firmante elegido confirma con su PIN. Es el único que puede
    firmarla; con una firma dentro de su tope queda autorizada.
 4. **PDF** — se descarga el formulario oficial completado, con quien firmó y la
@@ -30,6 +34,10 @@ autorizado elegido la firma digitalmente.
   (las cargadas antes de esta regla, sin firmante, las firma cualquier habilitado).
   Su firma la deja **autorizada**: no hay segunda firma. La misma persona no puede firmar
   dos veces.
+- **CUIT del proveedor**: obligatorio y con el dígito verificador correcto
+  (`server/services/cuit.py`); se guarda como `XX-XXXXXXXX-X`. Al editar una solicitud
+  vieja con el CUIT mal, pide corregirlo.
+- **Proveedor nuevo**: no se guarda sin el legajo impositivo (PDF).
 - **PIN por persona**: cada autorizado define su PIN la primera vez que firma. Se guarda
   hasheado (PBKDF2-SHA256), nunca en claro.
 - **Marca**: sólo pueden firmar los autorizados habilitados para esa marca.
