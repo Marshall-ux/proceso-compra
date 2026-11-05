@@ -1,5 +1,5 @@
-"""Tests del firmante unico (solo el elegido recibe el mail y solo el puede firmar)
-y de la cajera por ubicacion.
+"""Tests del firmante unico (solo el elegido recibe el mail y solo el puede firmar),
+de la cajera por ubicacion y del recuadro de firmas del PDF.
 
 Correr desde server/:  python -m unittest discover tests
 
@@ -13,12 +13,14 @@ import tempfile
 import unittest
 from unittest import mock
 
+import pdfplumber
 from flask import Flask
 
 from models import database
 from routes.solicitudes import bp as solicitudes_bp
 from services import avisos
 from services import solicitudes as svc
+from services.pdf_fill import generar_pdf
 from services.pins import _hash
 
 PIN = '482913'
@@ -161,6 +163,34 @@ class ConApi(ConBase):
         app.register_blueprint(solicitudes_bp, url_prefix='/api')
         self.api = app.test_client()
 
+    def alta(self, **cambios):
+        r = self.api.post('/api/solicitudes', json=self.datos(**cambios))
+        self.assertEqual(r.status_code, 201, r.get_json())
+        self.mails.clear()
+        return r.get_json()['id']
+
+    def firmar(self, sid, quien):
+        return self.api.post(f'/api/solicitudes/{sid}/autorizar',
+                             json={'autorizado_id': quien, 'pin': PIN})
+
+    def fijar_avisar_a(self, sid, valor):
+        conn = database.get_db()
+        try:
+            conn.execute('UPDATE solicitudes SET avisar_a = ? WHERE id = ?', (valor, sid))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def fijar_tope(self, autorizado_id, tope):
+        """Como si le hubieran bajado el tope después de cargar la solicitud."""
+        conn = database.get_db()
+        try:
+            conn.execute('UPDATE autorizados SET monto_autorizado = ? WHERE id = ?',
+                         (tope, autorizado_id))
+            conn.commit()
+        finally:
+            conn.close()
+
 
 class CircuitoCompleto(ConApi):
     """Alta por la API -> mail solo al firmante; firma -> mail a la cajera de la sede."""
@@ -192,24 +222,6 @@ class CircuitoCompleto(ConApi):
 
 
 class SoloFirmaElElegido(ConApi):
-    def alta(self, **cambios):
-        r = self.api.post('/api/solicitudes', json=self.datos(**cambios))
-        self.assertEqual(r.status_code, 201, r.get_json())
-        self.mails.clear()
-        return r.get_json()['id']
-
-    def firmar(self, sid, quien):
-        return self.api.post(f'/api/solicitudes/{sid}/autorizar',
-                             json={'autorizado_id': quien, 'pin': PIN})
-
-    def fijar_avisar_a(self, sid, valor):
-        conn = database.get_db()
-        try:
-            conn.execute('UPDATE solicitudes SET avisar_a = ? WHERE id = ?', (valor, sid))
-            conn.commit()
-        finally:
-            conn.close()
-
     def test_otro_habilitado_no_puede_firmar(self):
         sid = self.alta()
         r = self.firmar(sid, self.otro)
@@ -268,6 +280,38 @@ class SoloFirmaElElegido(ConApi):
         sid = self.alta()
         r = self.api.put(f'/api/solicitudes/{sid}', json=self.datos(avisar_a=[]))
         self.assertEqual(r.status_code, 400)
+
+
+class RecuadroDeFirmasDelPdf(ConApi):
+    """Recuadro AUTORIZADO POR del F 8.4-01: una autorizada nunca dice "Pendiente de
+    autorización", y la mitad para una segunda firma aparece solo si hace falta."""
+
+    def texto_pdf(self, sid):
+        destino = os.path.join(self.dir, f'agc-{sid}.pdf')
+        generar_pdf(svc.obtener(sid), destino)
+        with pdfplumber.open(destino) as pdf:
+            return pdf.pages[0].extract_text()
+
+    def test_autorizada_con_una_firma_no_dice_pendiente(self):
+        sid = self.alta()
+        self.assertEqual(self.firmar(sid, self.uno).get_json()['estado'], 'autorizada')
+        texto = self.texto_pdf(sid)
+        self.assertEqual(texto.count('Autorizado digitalmente'), 1)
+        self.assertNotIn('Pendiente de autorizaci', texto)
+
+    def test_pendiente_sin_firmas_lo_dice_una_sola_vez(self):
+        sid = self.alta()
+        self.assertEqual(self.texto_pdf(sid).count('Pendiente de autorizaci'), 1)
+
+    def test_vieja_con_una_firma_esperando_la_segunda(self):
+        # Vieja sin firmante elegido: firma alguien cuyo tope no cubre el monto.
+        sid = self.alta()
+        self.fijar_avisar_a(sid, '')
+        self.fijar_tope(self.otro, 500)
+        self.assertEqual(self.firmar(sid, self.otro).get_json()['estado'], 'pendiente')
+        texto = self.texto_pdf(sid)
+        self.assertEqual(texto.count('Autorizado digitalmente'), 1)
+        self.assertEqual(texto.count('Pendiente de autorizaci'), 1)
 
 
 if __name__ == '__main__':

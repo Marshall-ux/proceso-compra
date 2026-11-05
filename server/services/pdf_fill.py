@@ -241,8 +241,9 @@ class _Overlay:
 
 
 def _firmas(ov, solicitud):
-    """El original trae un unico recuadro 'AUTORIZADO POR', pero el proceso exige dos
-    autorizantes: se reparte ese recuadro en dos mitades."""
+    """El original trae un unico recuadro 'AUTORIZADO POR'. Lo normal es una sola firma
+    (la del firmante elegido) y ocupa el recuadro entero. Solo se parte en dos mitades
+    cuando hay dos firmas, o cuando una solicitud vieja tiene una y espera la segunda."""
     c = ov.c
     autorizaciones = solicitud.get('autorizaciones', [])
 
@@ -259,18 +260,22 @@ def _firmas(ov, solicitud):
             c.setFont('Helvetica-Oblique', 4.6)
             c.drawCentredString(centro_sol, y0 + 15, f'Solicitado el {fecha_sol}')
 
-    # Autorizantes: mitad izquierda y mitad derecha del recuadro original
+    # Autorizantes. Con dos mitades fijas, una autorizada con una sola firma salía con
+    # "Pendiente de autorización" en la otra mitad aunque el pie dijera AUTORIZADA.
     ax0, ay0, ax1, ay1 = CAJA_AUTORIZANTES
-    medio = (ax0 + ax1) / 2
+    pendiente = solicitud.get('estado') != 'autorizada'
+    if len(autorizaciones) >= 2 or (autorizaciones and pendiente):
+        medio = (ax0 + ax1) / 2
+        c.setStrokeColor(GRIS)
+        c.setLineWidth(0.4)
+        c.setDash(1, 2)
+        c.line(medio, ay0 + 3, medio, ay1 - 3)
+        c.setDash()
+        espacios = [(ax0, medio), (medio, ax1)]
+    else:
+        espacios = [(ax0, ax1)]
 
-    c.setStrokeColor(GRIS)
-    c.setLineWidth(0.4)
-    c.setDash(1, 2)
-    c.line(medio, ay0 + 3, medio, ay1 - 3)
-    c.setDash()
-
-    mitades = [(ax0, medio), (medio, ax1)]
-    for i, (mx0, mx1) in enumerate(mitades):
+    for i, (mx0, mx1) in enumerate(espacios):
         centro = (mx0 + mx1) / 2
         if i < len(autorizaciones):
             a = autorizaciones[i]
