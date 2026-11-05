@@ -11,6 +11,7 @@ os.environ.setdefault('APP_NOMBRE', 'Autorizaciones de Compra')
 os.environ.setdefault('MAIL_FROM_NOMBRE', os.environ['APP_NOMBRE'])
 
 from models.database import init_db
+from services import admin, autopack
 from routes.autorizados import bp as autorizados_bp
 from routes.facturas import bp as facturas_bp
 from routes.solicitudes import bp as solicitudes_bp
@@ -21,6 +22,13 @@ def crear_app():
     # el log. Sin esto, en Docker no se ve nada por debajo de WARNING.
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+
+    # Una clave de ejemplo en producción no protege nada: que quede a la vista en el log.
+    log = logging.getLogger(__name__)
+    if admin.usando_default():
+        log.warning('ADMIN_PASSWORD es una clave de ejemplo: configurá una propia en el .env')
+    if autopack.usando_default():
+        log.warning('AUTOPACK_PASSWORD es la clave por defecto: configurá una propia en el .env')
 
     app = Flask(__name__)
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB

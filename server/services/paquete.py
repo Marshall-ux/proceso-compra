@@ -15,7 +15,6 @@ from services.marcas import CONCEPTOS, UBICACIONES
 from services.pdf_fill import fmt_equivalente, fmt_fecha_hora, fmt_importe, fmt_money, generar_pdf
 
 UPLOADS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
-GENERADOS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'generated')
 
 CRITICIDADES = {
     'urgente': 'URGENTE',
@@ -131,10 +130,7 @@ def _agregar_adjunto(zf, archivo, destino):
 
 def _escribir_solicitud(zf, solicitud, prefijo=''):
     """Vuelca una solicitud completa dentro del zip, bajo `prefijo`."""
-    os.makedirs(GENERADOS, exist_ok=True)
-    pdf = os.path.join(GENERADOS, f'autorizacion-{solicitud["id"]}.pdf')
-    generar_pdf(solicitud, pdf)
-    zf.write(pdf, f'{prefijo}Autorizacion-{solicitud["id"]:04d}.pdf')
+    zf.writestr(f'{prefijo}Autorizacion-{solicitud["id"]:04d}.pdf', generar_pdf(solicitud).getvalue())
     zf.writestr(f'{prefijo}resumen.txt', _resumen(solicitud))
 
     for i, f in enumerate(solicitud.get('facturas', []), start=1):

@@ -1,8 +1,8 @@
-node_modules/
-venv/
-.venv/
-__pycache__/
-*.pyc
+**/node_modules/
+**/venv/
+**/.venv/
+**/__pycache__/
+**/*.pyc
 .git/
 *.db
 .env
@@ -10,5 +10,4 @@ client/dist/
 docs/
 server/uploads/*
 !server/uploads/.gitkeep
-server/generated/*
-!server/generated/.gitkeep
+server/generated/
