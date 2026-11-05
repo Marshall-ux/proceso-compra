@@ -221,6 +221,24 @@ class Eliminacion(ConApi):
             self.assertEqual(self.eliminar(sid, clave='clave-de-prueba').status_code, 200)
 
 
+class ListaDelInicio(ConApi):
+    def test_dice_a_quien_espera_y_quien_firmo(self):
+        sid = self.alta()
+        elegido = svc.obtener(sid)['avisados'][0]
+        fila = {s['id']: s for s in self.api.get('/api/solicitudes').get_json()}[sid]
+        self.assertEqual((fila['firmante'], fila['firmado_por']), (elegido, None))
+
+        self.firmar(sid, self.uno)
+        fila = {s['id']: s for s in self.api.get('/api/solicitudes').get_json()}[sid]
+        self.assertEqual(fila['firmado_por'], elegido)
+
+    def test_una_vieja_sin_firmante_no_espera_a_nadie_en_particular(self):
+        sid = self.alta()
+        self.fijar_avisar_a(sid, '')
+        fila = {s['id']: s for s in self.api.get('/api/solicitudes').get_json()}[sid]
+        self.assertEqual(fila['firmante'], '')
+
+
 class PdfYZipEnMemoria(ConApi):
     def test_pdf(self):
         r = self.api.get(f'/api/solicitudes/{self.alta()}/pdf')
