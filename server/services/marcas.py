@@ -12,6 +12,14 @@ MARCAS = [
 
 EMPRESAS = ['ALCO ROSARIO S.A.', 'NEOSTAR S.A.', 'XINOXIA S.A.', 'DASEOS S.A.', 'HIKARI S.A.']
 
+# Sede a la que corresponde el gasto. No está en el formulario de papel: la agrega la
+# app porque, junto con la razón social, define a qué cajera le llega el aviso de
+# autorizada (ver services/avisos.py).
+UBICACIONES = {
+    'rosario': 'Rosario',
+    'santa_fe': 'Santa Fe',
+}
+
 CONCEPTOS = {
     'publicidad': 'PUBLICIDAD / MARKETING',
     'muebles': 'MUEBLES Y ÚTILES',

@@ -6,7 +6,7 @@ import { CONCEPTOS, fmtFechaHora, fmtImporte, montoEnPesos } from '../constants.
 import { abiertasSimilares, crearSolicitud, extraerFacturas } from '../services/api.js'
 
 const VACIA = {
-  fecha: '', empresa: '', marca: '', empresas: [], marcas: [], marca_otro: '',
+  fecha: '', empresa: '', marca: '', empresas: [], marcas: [], marca_otro: '', ubicacion: '',
   proveedor_tipo: '', proveedor_nombre: '',
   moneda: 'ARS', tipo_cambio: '',
   cuit: '', tipo_orden: '', duracion_orden: '', concepto: '', concepto_otro: '', monto_total: '',
@@ -15,7 +15,7 @@ const VACIA = {
   solicitado_por: '', factura_numero: '',
   criticidad: '', criticidad_obs: '', requiere_oc: '', cbu_imagen: '',
   legajo_nombre: '', legajo_archivo: '', facturas: [], items: [],
-  avisar_a: [],   // ids de los autorizados a los que les llega el mail
+  avisar_a: [],   // [id] del firmante elegido: el mail le llega solo a esa persona
 }
 
 export default function NuevaPage() {

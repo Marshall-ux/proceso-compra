@@ -123,8 +123,8 @@ Dos avisos automáticos, cada uno en una transición del circuito:
 
 | Cuándo | A quién | Qué dice |
 |---|---|---|
-| Se carga un gasto (queda **pendiente**) | Los autorizantes habilitados para esa marca | Hay una AGC esperando firma; el gasto no avanza hasta que alguien autorice |
-| La última firma la deja **autorizada** | La cajera de cada razón social imputada | Ya se puede gestionar el pago |
+| Se carga un gasto (queda **pendiente**) | Solo el firmante que eligió quien cargó el gasto | Hay una AGC esperando su firma; el gasto no avanza hasta que alguien autorice |
+| La última firma la deja **autorizada** | La cajera de cada razón social imputada, según la ubicación (Rosario / Santa Fe) | Ya se puede gestionar el pago |
 
 Reglas de la implementación (`server/services/avisos.py`):
 
@@ -156,8 +156,22 @@ y testear sin cuenta de mail.
 | `MAIL_FROM_NOMBRE` | Nombre del remitente. Normalmente igual a `APP_NOMBRE`. |
 | `MAIL_REPLY_TO` | A dónde van las respuestas. Sin definir, no se manda. |
 | `PUBLIC_BASE_URL` | Dominio con el que se arman los links (`http://192.168.41.39`). **Obligatorio en Docker**: detrás de nginx el request dice `backend:5000`. |
-| `AUTORIZA_NOTIF_EMAIL` | Copia fija que recibe todos los avisos de gasto nuevo, sea de la marca que sea. |
-| `CAJA_ALCO_ROSARIO`, `CAJA_NEOSTAR`, `CAJA_XINOXIA`, `CAJA_DASEOS`, `CAJA_HIKARI` | Cajera de cada razón social, para el aviso de autorizada. |
+| `CAJA_<UBICACION>_<EMPRESA>` (ej. `CAJA_SANTA_FE_HIKARI`, `CAJA_ROSARIO_ALCO_ROSARIO`) | Cajera de cada razón social en cada ubicación, para el aviso de autorizada. |
+| `CAJA_ALCO_ROSARIO`, `CAJA_NEOSTAR`, `CAJA_XINOXIA`, `CAJA_DASEOS`, `CAJA_HIKARI` | Cajera por razón social sola: para solicitudes sin ubicación (cargadas antes de que existiera) y razones sociales sin cajera por sede. |
+
+Cajeras por ubicación y razón social (defaults del código):
+
+| | Rosario | Santa Fe |
+|---|---|---|
+| ALCO ROSARIO S.A. | nblois | mgonzalez |
+| NEOSTAR S.A. | mspurello | evanlesberg |
+| HIKARI S.A. | bcoll | dmorelli |
+| XINOXIA S.A. | mlhenning | mlhenning |
+| DASEOS S.A. | mspurello | mspurello |
+
+XINOXIA y DASEOS no tienen cajera por sede: van a la de la razón social, sea cual sea
+la ubicación. Una solicitud sin ubicación (anterior a este cambio) avisa por razón
+social, que coincide con la columna Rosario.
 
 Las cajeras tienen **default en el código** (`services/avisos.py`), así la app avisa
 aunque el `.env` esté pelado. Mover a alguien es tocar el `.env`, no el código; una lista
@@ -166,16 +180,29 @@ aunque el `.env` esté pelado. Mover a alguien es tocar el `.env`, no el código
 
 ### A quién le llega el aviso de gasto nuevo
 
-**Lo elige quien carga la solicitud, y es obligatorio.** Al final del alta aparece
-*¿A quién le avisamos?* con los autorizados que pueden firmar ese gasto:
+**Lo elige quien carga la solicitud, es obligatorio y es una sola persona.** Al final
+del alta aparece *¿Quién firma esta solicitud?* con los autorizados que pueden firmar
+ese gasto:
 
 - habilitados para la marca (su planilla o Multimarca; con varias marcas, solo
   Multimarca, igual que para firmar), y
 - con tope suficiente para el monto, o sin límite.
 
-Hay que tildar al menos uno; sin eso la solicitud no se guarda. El mail les llega solo
-a los tildados (más la copia de `AUTORIZA_NOTIF_EMAIL`), nunca a toda la planilla. En el
-detalle de la solicitud queda a quién se le avisó.
+Hay que elegir exactamente uno; sin eso la solicitud no se guarda. El mail le llega
+exclusivamente a esa persona: sin copias y nunca a toda la planilla. En el detalle de
+la solicitud queda quién es el firmante elegido. (Las solicitudes anteriores a este
+cambio pueden tener varios avisados; se respetan tal cual.)
+
+**Solo puede firmar el firmante elegido**: en el detalle, en *Para firmar* y en la
+firma en lote (`services/autorizacion.py`, `firmar()`). Si otra persona lo intenta, la
+firma se rechaza aunque esté habilitada para la marca. Las solicitudes cargadas antes
+de que existiera la elección no tienen firmante y las sigue pudiendo firmar cualquier
+habilitado.
+
+Si el elegido ya no puede firmar (lo dieron de baja, se editó la marca o el monto, o le
+bajaron el tope y hace falta una segunda firma), el detalle lo avisa: se destraba con
+**Editar**, eligiendo otro firmante. Al nuevo le llega el mail y, como editar borra las
+firmas, la firma desde cero. La firma de conformidad de los pagos imputados no cambia.
 
 El mail de cada autorizado vive en la base y se carga en el panel de **Autorizados**
 con la clave de administración. Quien no tiene mail aparece en la lista pero no se

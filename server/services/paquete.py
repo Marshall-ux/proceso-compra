@@ -11,7 +11,7 @@ import unicodedata
 import zipfile
 
 from services import moneda as mon
-from services.marcas import CONCEPTOS
+from services.marcas import CONCEPTOS, UBICACIONES
 from services.pdf_fill import fmt_equivalente, fmt_fecha_hora, fmt_importe, fmt_money, generar_pdf
 
 UPLOADS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
@@ -68,6 +68,7 @@ def _resumen(solicitud):
         f'Fecha de la factura : {solicitud.get("fecha") or "-"}',
         f'Cargada el          : {fmt_fecha_hora(solicitud.get("created_at"))}',
         f'Empresa             : {", ".join(solicitud.get("empresas") or []) or solicitud.get("empresa") or "-"}',
+        f'Ubicación           : {UBICACIONES.get(solicitud.get("ubicacion"), solicitud.get("ubicacion") or "-")}',
         f'Marca               : {", ".join(solicitud.get("marcas") or []) or solicitud.get("marca") or "-"}',
         f'Proveedor           : {solicitud.get("proveedor_nombre") or "-"}',
         f'CUIT                : {solicitud.get("cuit") or "-"}',

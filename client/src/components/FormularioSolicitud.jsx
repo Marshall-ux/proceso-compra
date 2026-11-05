@@ -1,6 +1,6 @@
 import {
   CONCEPTOS, CONDICION_DIAS, CONDICION_PAGO, CRITICIDAD, EMPRESAS, FORMA_PAGO, MARCAS,
-  MONEDAS, PROVEEDOR_TIPO, REQUIERE_OC, TIPO_ORDEN, fmtImporte, fmtMoney, montoEnPesos,
+  MONEDAS, PROVEEDOR_TIPO, REQUIERE_OC, TIPO_ORDEN, UBICACIONES, fmtImporte, fmtMoney, montoEnPesos,
 } from '../constants.js'
 import { subirCbu, subirLegajo } from '../services/api.js'
 import AdjuntoUploader from './AdjuntoUploader.jsx'
@@ -58,6 +58,16 @@ export default function FormularioSolicitud({ datos, onChange, autocompletados =
         <div className="field__nota">
           La marca define quiénes pueden autorizar. Si tildás varias, solo puede autorizar
           quien las cubra todas (Multimarca o dirección).
+        </div>
+      </div>
+
+      <div className="seccion">
+        <div className="seccion__titulo">
+          Ubicación <span style={{ color: 'var(--danger)' }}>*</span>
+        </div>
+        <Opciones nombre="ubicacion" valor={datos.ubicacion} opciones={UBICACIONES} onChange={set('ubicacion')} />
+        <div className="field__nota">
+          Junto con la empresa, define a qué cajera le llega el aviso cuando la solicitud queda autorizada.
         </div>
       </div>
 

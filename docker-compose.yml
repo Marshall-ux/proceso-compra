@@ -31,9 +31,15 @@ services:
       # Dominio con el que se arman los links de los mails. Sin esto el link sale
       # apuntando a http://backend:5000, que no existe fuera de la red de Docker.
       - PUBLIC_BASE_URL
-      # Destinatarios: copia fija de administración y cajeras por razón social.
-      # (El mail de cada autorizante está en la base: se carga desde el panel.)
-      - AUTORIZA_NOTIF_EMAIL
+      # Destinatarios: cajeras por ubicación y razón social (y por razón social sola,
+      # para las solicitudes sin ubicación). El mail de cada autorizante está en la
+      # base: se carga desde el panel.
+      - CAJA_ROSARIO_ALCO_ROSARIO
+      - CAJA_SANTA_FE_ALCO_ROSARIO
+      - CAJA_ROSARIO_NEOSTAR
+      - CAJA_SANTA_FE_NEOSTAR
+      - CAJA_ROSARIO_HIKARI
+      - CAJA_SANTA_FE_HIKARI
       - CAJA_ALCO_ROSARIO
       - CAJA_NEOSTAR
       - CAJA_XINOXIA
