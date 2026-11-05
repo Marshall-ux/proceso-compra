@@ -132,8 +132,8 @@ export default function HomePage() {
           <div className="hero__eyebrow">Neostar · Compras</div>
           <h1 className="hero__title">Autorizaciones de <span>compra</span></h1>
           <p className="hero__subtitle">
-            Subí la factura del proveedor, revisá los datos y hacé que dos autorizados
-            firmen. El formulario F 8.4-01 se completa solo.
+            Subí la factura del proveedor, revisá los datos y elegí quién la firma.
+            El formulario F 8.4-01 se completa solo.
           </p>
         </div>
         <img src={robot} alt="" className="hero__robot" />

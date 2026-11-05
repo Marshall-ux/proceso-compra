@@ -2,20 +2,20 @@
 
 Aplicación web que automatiza el circuito de autorización de compras: se sube la
 factura del proveedor, se extraen sus datos, se completa el formulario oficial
-**F 8.4-01 · Autorización Genérica de Compra o Contratación (Rev. 07)** y dos
-autorizados firman digitalmente.
+**F 8.4-01 · Autorización Genérica de Compra o Contratación (Rev. 07)** y el
+autorizado elegido la firma digitalmente.
 
 ## Cómo funciona
 
 1. **Subir factura** — se lee el PDF y se extraen proveedor, CUIT, fecha, importes,
    condiciones de pago, contacto y el detalle de ítems.
 2. **Revisar y completar** — los campos leídos de la factura se muestran resaltados.
-   El empleado completa lo que la factura no dice (marca, concepto, tipo de orden,
-   quién solicita).
-3. **Autorizar** — se elige a cada autorizante de la lista y confirma con su PIN.
-   **Hacen falta dos personas distintas**; con una sola el proceso no se completa.
-4. **PDF** — se descarga el formulario oficial completado, con los dos autorizantes
-   y la fecha/hora de cada firma.
+   El empleado completa lo que la factura no dice (marca, ubicación, concepto, tipo de
+   orden, quién solicita) y elige **un firmante**, que recibe el aviso por mail.
+3. **Autorizar** — el firmante elegido confirma con su PIN. Es el único que puede
+   firmarla; con una firma dentro de su tope queda autorizada.
+4. **PDF** — se descarga el formulario oficial completado, con quien firmó y la
+   fecha/hora de cada firma. La cajera de la empresa y la ubicación recibe el aviso.
 
 ## Stack
 
@@ -26,14 +26,18 @@ autorizados firman digitalmente.
 
 ## Reglas del proceso
 
-- **Dos autorizantes distintos** por solicitud. La misma persona no puede firmar dos veces.
+- **Un firmante por solicitud**, elegido al cargarla: solo esa persona puede firmarla
+  (las cargadas antes de esta regla, sin firmante, las firma cualquier habilitado).
+  Alcanza **una firma** dentro de su tope. La misma persona no puede firmar dos veces.
 - **PIN por persona**: cada autorizado define su PIN la primera vez que firma. Se guarda
   hasheado (PBKDF2-SHA256), nunca en claro.
 - **Marca**: sólo pueden firmar los autorizados habilitados para esa marca.
   Los de **Multimarca** pueden autorizar cualquiera; la planilla de **Kia** cubre también
   Suzuki y la de **Jeep** corresponde a FCA / Chrysler.
-- **Topes**: si el monto supera el tope de la persona, se avisa pero se permite firmar,
-  y queda registrado en el PDF. Los directores figuran *sin límite*.
+- **Topes**: al cargar solo se puede elegir como firmante a quien cubre el monto. Si
+  igual lo supera (por ejemplo, le bajaron el tope), se avisa y se permite firmar, y queda
+  registrado en el PDF, pero con su firma no alcanza: se destraba editando la solicitud y
+  eligiendo otro firmante (editar borra las firmas). Los directores figuran *sin límite*.
 - **Edición**: si se edita una solicitud ya firmada, las firmas se borran y hay que
   volver a autorizar. Una autorizada no se puede modificar.
 
