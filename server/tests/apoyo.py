@@ -65,7 +65,7 @@ class ConBase(unittest.TestCase):
         return {
             'fecha': '05/11/2026', 'empresas': ['HIKARI S.A.'], 'marcas': ['NISSAN'],
             'ubicacion': 'santa_fe', 'proveedor_tipo': 'habitual', 'proveedor_nombre': 'Proveedor SA',
-            'cuit': '30-12345678-9', 'tipo_orden': 'cerrada', 'concepto': 'gastos',
+            'cuit': '30-71234567-1', 'tipo_orden': 'cerrada', 'concepto': 'gastos',
             'criticidad': 'urgente', 'solicitado_por': 'Quien Carga', 'monto_total': 1000,
             'moneda': 'ARS', 'avisar_a': [self.uno], 'items': [],
             **cambios,

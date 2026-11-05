@@ -6,7 +6,7 @@ import { candidatosAviso } from '../services/api.js'
 // "gasto para autorizar" le llega exclusivamente a ella (ni a toda la planilla ni a
 // varios a la vez). La lista sale del servidor según la marca y el monto: solo quien
 // puede firmarlo solo. `valores` es [id] o []: el servidor lo guarda como lista.
-export default function SelectorAvisados({ marcas, monto, valores = [], onChange }) {
+export default function SelectorAvisados({ marcas, monto, valores = [], onChange, error = '' }) {
   const [candidatos, setCandidatos] = useState([])
   const [cargando, setCargando] = useState(false)
   const clave = `${(marcas || []).join('|')}#${Number(monto) || 0}`
@@ -37,10 +37,11 @@ export default function SelectorAvisados({ marcas, monto, valores = [], onChange
   }, [clave])  // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="seccion">
+    <div className={`seccion ${error ? 'grupo grupo--error' : ''}`} data-campo="avisar_a" data-error={error ? 'si' : undefined}>
       <div className="seccion__titulo">
-        ¿Quién firma esta solicitud? <span style={{ color: 'var(--danger)' }}>*</span>
+        ¿Quién firma esta solicitud? <span className="obligatorio">*</span>
       </div>
+      {error && <div className="field__error" style={{ marginTop: '-0.4rem', marginBottom: '0.6rem' }}>{error}</div>}
       {!(marcas || []).length || !(Number(monto) > 0) ? (
         <div className="field__nota">
           Elegí la marca y cargá el monto (en dólares, también el tipo de cambio) para ver

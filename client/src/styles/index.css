@@ -221,8 +221,17 @@ a { color: var(--green-dark); text-decoration: none; }
   border-color: var(--green);
   box-shadow: 0 0 0 3px var(--green-soft);
 }
-.field--autocompletado input, .field--autocompletado select { background: var(--green-softer); }
+/* Con .field.field--… para ganarle a la regla general de los campos (que pone fondo blanco
+   y borde gris): con un solo nombre de clase no se veía ni el verde ni el rojo. */
+.field.field--autocompletado input, .field.field--autocompletado select, .field.field--autocompletado textarea {
+  background: var(--green-soft);
+}
 .field__nota { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; }
+.obligatorio { color: var(--danger); font-weight: 700; }
+/* Error de un campo: borde rojo y el motivo debajo, con el nombre que se ve en pantalla. */
+.field.field--error input, .field.field--error select, .field.field--error textarea { border-color: var(--danger); }
+.field__error { font-size: 0.78rem; color: var(--danger); font-weight: 600; margin-top: 0.3rem; }
+.grupo--error .opcion { border-color: var(--danger); }
 
 /* Grupos de opciones (los checkbox del formulario en papel) */
 .opciones { display: flex; flex-wrap: wrap; gap: 0.5rem; }

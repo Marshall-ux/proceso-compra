@@ -76,6 +76,10 @@ export const obtenerSolicitud = (id) => pedir(`/solicitudes/${id}`)
 export const paraFirmar = (autorizadoId) =>
   pedir(`/solicitudes/para-firmar?autorizado_id=${autorizadoId}`)
 
+// Datos de un proveedor tomados de sus solicitudes anteriores (por CUIT).
+export const buscarProveedor = (cuit) =>
+  pedir(`/proveedores/${encodeURIComponent(String(cuit || '').replace(/\D/g, ''))}`)
+
 // Órdenes abiertas del mismo CUIT, marca y concepto (para no duplicar una al cargar).
 export const abiertasSimilares = (cuit, marcas, concepto) => {
   const qs = new URLSearchParams()
