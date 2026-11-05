@@ -12,7 +12,9 @@ import zipfile
 
 from services import moneda as mon
 from services.marcas import CONCEPTOS, UBICACIONES
-from services.pdf_fill import fmt_equivalente, fmt_fecha_hora, fmt_importe, fmt_money, generar_pdf
+from services.pdf_fill import (
+    etiqueta_estado, fmt_equivalente, fmt_fecha_hora, fmt_importe, fmt_money, generar_pdf,
+)
 
 UPLOADS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
 
@@ -52,7 +54,7 @@ def nombre_zip(solicitud):
 
 def _resumen(solicitud):
     """Texto plano con los datos principales, para leer desde el disco."""
-    estado = 'AUTORIZADA' if solicitud.get('estado') == 'autorizada' else 'PENDIENTE DE AUTORIZACIÓN'
+    estado = etiqueta_estado(solicitud.get('estado'))
     concepto = CONCEPTOS.get(solicitud.get('concepto'), solicitud.get('concepto') or '')
     if solicitud.get('concepto') == 'otros' and solicitud.get('concepto_otro'):
         concepto += f' ({solicitud["concepto_otro"]})'

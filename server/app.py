@@ -11,7 +11,7 @@ os.environ.setdefault('APP_NOMBRE', 'Autorizaciones de Compra')
 os.environ.setdefault('MAIL_FROM_NOMBRE', os.environ['APP_NOMBRE'])
 
 from models.database import init_db
-from services import admin, autopack
+from services import admin, autopack, recordatorios
 from routes.autorizados import bp as autorizados_bp
 from routes.facturas import bp as facturas_bp
 from routes.solicitudes import bp as solicitudes_bp
@@ -36,6 +36,11 @@ def crear_app():
     CORS(app)
 
     init_db()
+
+    # Recordatorios al firmante (48 h y una semana después, en días hábiles). Se apagan
+    # con RECORDATORIOS=0, por ejemplo para una copia de prueba con mail de verdad.
+    if os.environ.get('RECORDATORIOS', '1') != '0':
+        recordatorios.iniciar()
 
     app.register_blueprint(facturas_bp, url_prefix='/api')
     app.register_blueprint(solicitudes_bp, url_prefix='/api')

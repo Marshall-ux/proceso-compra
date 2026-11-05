@@ -71,11 +71,20 @@ def verificar_autorizante(conn, autorizado_id, pin, solicitud_id=None):
     return autorizado
 
 
+def motivo_no_pendiente(estado):
+    """Por qué no se puede firmar una solicitud que no está pendiente."""
+    return {
+        'autorizada': 'Ya está autorizada',
+        'observada': 'Está devuelta para corregir: cuando la editen vuelve a firma',
+        'rechazada': 'Está rechazada: no se puede firmar',
+    }.get(estado, 'No está pendiente de firma')
+
+
 def firmar(conn, solicitud, autorizado):
     """Aplica las reglas de ESA solicitud y registra la firma.
     Devuelve (ok, motivo, excedio_tope)."""
-    if solicitud['estado'] == 'autorizada':
-        return False, 'Ya está autorizada', False
+    if solicitud['estado'] != 'pendiente':
+        return False, motivo_no_pendiente(solicitud['estado']), False
 
     marcas = marcas_de(solicitud)
     if autorizado['lista'] not in listas_habilitadas(marcas):

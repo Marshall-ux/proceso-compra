@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import PanelLote from '../components/PanelLote.jsx'
 import robot from '../assets/robot-id.png'
-import { EMPRESAS, LISTAS, esperaDesde, fmtFechaHora, fmtImporte } from '../constants.js'
+import { EMPRESAS, LISTAS, esperaDesde, estadoDe, fmtFechaHora, fmtImporte } from '../constants.js'
 import {
   cerrarSesionAutopack, iniciarSesionAutopack, listarAutorizados, listarSolicitudes,
   marcarAutopack, paraFirmar, sesionAutopack, urlZipLote,
@@ -238,6 +238,8 @@ export default function HomePage() {
               <option value="">Todas</option>
               <option value="pendiente">Pendientes</option>
               <option value="autorizada">Autorizadas</option>
+              <option value="observada">Observadas (devueltas)</option>
+              <option value="rechazada">Rechazadas</option>
             </select>
             <select
               value={empresa} onChange={(e) => setEmpresa(e.target.value)}
@@ -345,6 +347,17 @@ export default function HomePage() {
                     <td>
                       {s.estado === 'autorizada' ? (
                         <span style={{ fontSize: '0.85rem' }}>✓ {s.firmado_por || '—'}</span>
+                      ) : s.estado === 'observada' || s.estado === 'rechazada' ? (
+                        // Quién la devolvió o rechazó y por qué (completo al pasar el mouse).
+                        <>
+                          <span style={{ fontSize: '0.85rem' }}>
+                            {s.estado === 'rechazada' ? '✕ Rechazó' : '↩ Devolvió'} {s.revision_por || '—'}
+                          </span>
+                          <div className="espera" title={s.revision_motivo}>
+                            «{(s.revision_motivo || '').length > 60
+                              ? `${s.revision_motivo.slice(0, 57)}…` : s.revision_motivo}»
+                          </div>
+                        </>
                       ) : (() => {
                         // A quién espera y desde cuándo: el que la frena tiene nombre.
                         const e = esperaDesde(s.created_at)
@@ -357,9 +370,7 @@ export default function HomePage() {
                       })()}
                     </td>
                     <td>
-                      {s.estado === 'autorizada'
-                        ? <span className="badge badge--success">Autorizada</span>
-                        : <span className="badge badge--warning">Pendiente</span>}
+                      <span className={`badge badge--${estadoDe(s.estado).badge}`}>{estadoDe(s.estado).etiqueta}</span>
                     </td>
                     <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
                       <input

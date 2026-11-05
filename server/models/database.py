@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS solicitudes (
     contacto_mail       TEXT NOT NULL DEFAULT '',
     observaciones       TEXT NOT NULL DEFAULT '',
     solicitado_por      TEXT NOT NULL DEFAULT '',
-    estado              TEXT NOT NULL DEFAULT 'pendiente',  -- pendiente | autorizada
+    estado              TEXT NOT NULL DEFAULT 'pendiente',  -- pendiente | autorizada | observada | rechazada
     -- Legacy: factura unica. Se mantiene por compatibilidad; las facturas nuevas
     -- viven en la tabla 'facturas' (una solicitud puede tener varias).
     factura_nombre      TEXT NOT NULL DEFAULT '',
@@ -160,7 +160,19 @@ CREATE TABLE IF NOT EXISTS eliminaciones (
     fecha             TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
+-- Devoluciones y rechazos del firmante: quién, qué hizo y por qué. Una solicitud puede
+-- devolverse varias veces (se corrige y vuelve a firma); el rechazo es definitivo.
+CREATE TABLE IF NOT EXISTS revisiones (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    solicitud_id  INTEGER NOT NULL REFERENCES solicitudes(id) ON DELETE CASCADE,
+    autorizado_id INTEGER NOT NULL REFERENCES autorizados(id),
+    accion        TEXT NOT NULL,        -- observada | rechazada
+    motivo        TEXT NOT NULL,
+    fecha         TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_items_solicitud ON items(solicitud_id);
+CREATE INDEX IF NOT EXISTS idx_revisiones_solicitud ON revisiones(solicitud_id);
 CREATE INDEX IF NOT EXISTS idx_auth_solicitud ON autorizaciones(solicitud_id);
 """
 
@@ -207,6 +219,12 @@ _COLUMNAS_V2 = {
     # Sede (rosario | santa_fe): con la razón social define a qué cajera se avisa.
     # Las solicitudes que ya existían quedan vacías y avisan como antes (por empresa).
     'ubicacion': "TEXT NOT NULL DEFAULT ''",
+    # Recordatorios al firmante (ver services/recordatorios.py): desde cuándo le toca
+    # firmar (alta, cambio de firmante o corrección; vacío = desde el alta) y cuándo
+    # salió cada recordatorio.
+    'aviso_firmante_at': 'TEXT',
+    'recordatorio1_at': 'TEXT',
+    'recordatorio2_at': 'TEXT',
 }
 
 

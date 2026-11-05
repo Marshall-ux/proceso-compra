@@ -173,11 +173,14 @@ def actualizar(solicitud_id, datos, items, facturas=None, avisar_a=None):
     también la forma de cambiar de firmante cuando el elegido ya no puede firmar."""
     conn = get_db()
     try:
-        row = conn.execute('SELECT estado FROM solicitudes WHERE id = ?', (solicitud_id,)).fetchone()
+        row = conn.execute('SELECT estado, avisar_a FROM solicitudes WHERE id = ?',
+                           (solicitud_id,)).fetchone()
         if not row:
             return False, 'La solicitud no existe'
         if row['estado'] == 'autorizada':
             return False, 'La solicitud ya está autorizada y no se puede modificar'
+        if row['estado'] == 'rechazada':
+            return False, 'La solicitud está rechazada y no se puede modificar'
         datos = _normalizar(datos)
         # Si alguien ya firmó, editar cambiaría lo que firmó: se limpian las firmas.
         conn.execute('DELETE FROM autorizaciones WHERE solicitud_id = ?', (solicitud_id,))
@@ -190,6 +193,15 @@ def actualizar(solicitud_id, datos, items, facturas=None, avisar_a=None):
         if avisar_a is not None:
             conn.execute('UPDATE solicitudes SET avisar_a = ? WHERE id = ?',
                          (json.dumps(avisar_a), solicitud_id))
+        # Una devuelta para corregir vuelve a firma al editarla. Si además cambió el
+        # firmante, o vuelve de una devolución, le toca firmar desde ahora: los
+        # recordatorios cuentan de nuevo (el mail lo manda la ruta).
+        firmante_nuevo = avisar_a is not None and any(i not in ids_avisar_a(row) for i in avisar_a)
+        if row['estado'] == 'observada' or firmante_nuevo:
+            conn.execute(
+                "UPDATE solicitudes SET estado = 'pendiente', "
+                "aviso_firmante_at = datetime('now', 'localtime'), "
+                'recordatorio1_at = NULL, recordatorio2_at = NULL WHERE id = ?', (solicitud_id,))
         conn.execute('DELETE FROM items WHERE solicitud_id = ?', (solicitud_id,))
         _guardar_items(conn, solicitud_id, items)
         # facturas=None -> no se tocan (edicion que no cambia adjuntos); lista -> se reemplazan.
@@ -261,8 +273,11 @@ def obtener(solicitud_id):
         solicitud['requiere_segunda_firma'] = (not autorizada and len(firmas) == 1 and not ids)
         solicitud['autorizaciones_faltantes'] = 0 if autorizada else 1
 
-        # Pagos imputados a esta AGC (import diferido para evitar ciclo de imports).
+        # Pagos imputados a esta AGC y devoluciones/rechazos del firmante (imports
+        # diferidos para evitar ciclos).
         from services import pagos as pagos_svc
+        from services import revisiones as revisiones_svc
+        solicitud['revisiones'] = revisiones_svc.listar(conn, solicitud_id)
         solicitud['pagos'] = pagos_svc.listar_pagos(conn, solicitud_id)
         solicitud['pagos_resumen'] = pagos_svc.resumen(solicitud)
         return solicitud
@@ -279,7 +294,12 @@ def listar(estado=None, busqueda=None, empresa=None):
                '(SELECT COUNT(*) FROM autorizaciones a WHERE a.solicitud_id = s.id) AS firmas, '
                '(SELECT COUNT(*) FROM facturas f WHERE f.solicitud_id = s.id) AS facturas, '
                "(SELECT group_concat(au.nombre, ', ') FROM autorizaciones a "
-               ' JOIN autorizados au ON au.id = a.autorizado_id WHERE a.solicitud_id = s.id) AS firmado_por '
+               ' JOIN autorizados au ON au.id = a.autorizado_id WHERE a.solicitud_id = s.id) AS firmado_por, '
+               # La última devolución o rechazo: quién y por qué (se ve en la lista).
+               '(SELECT r.motivo FROM revisiones r WHERE r.solicitud_id = s.id '
+               ' ORDER BY r.id DESC LIMIT 1) AS revision_motivo, '
+               '(SELECT au.nombre FROM revisiones r JOIN autorizados au ON au.id = r.autorizado_id '
+               ' WHERE r.solicitud_id = s.id ORDER BY r.id DESC LIMIT 1) AS revision_por '
                'FROM solicitudes s WHERE 1=1')
         params = []
         if estado:
@@ -355,8 +375,8 @@ def para_firmar(autorizado_id):
 
 def eliminar(solicitud_id, motivo, eliminado_por='', es_admin=False):
     """Borra una solicitud dejando acta en 'eliminaciones' (qué, por qué y quién).
-    El motivo es obligatorio. Una solicitud ya autorizada solo la puede eliminar
-    administración (es_admin). Devuelve (ok, error)."""
+    El motivo es obligatorio. Una solicitud autorizada o rechazada (que queda como
+    registro) solo la puede eliminar administración (es_admin). Devuelve (ok, error)."""
     motivo = str(motivo or '').strip()
     if not motivo:
         return False, 'Indicá el motivo de la eliminación'
@@ -366,8 +386,9 @@ def eliminar(solicitud_id, motivo, eliminado_por='', es_admin=False):
         s = conn.execute('SELECT * FROM solicitudes WHERE id = ?', (solicitud_id,)).fetchone()
         if not s:
             return False, 'La solicitud no existe'
-        if s['estado'] == 'autorizada' and not es_admin:
-            return False, 'Una solicitud autorizada solo la puede eliminar administración (con la clave)'
+        if s['estado'] in ('autorizada', 'rechazada') and not es_admin:
+            return False, (f'Una solicitud {s["estado"]} solo la puede eliminar administración '
+                           f'(con la clave)')
         firmas = conn.execute(
             'SELECT COUNT(*) AS n FROM autorizaciones WHERE solicitud_id = ?',
             (solicitud_id,)).fetchone()['n']
