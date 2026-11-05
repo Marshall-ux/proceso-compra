@@ -12,6 +12,7 @@ import zipfile
 from unittest import mock
 
 from models import database
+from services import admin
 from services import solicitudes as svc
 from services.marcas import listas_habilitadas
 from tests.apoyo import PIN, ConApi
@@ -30,6 +31,17 @@ class ListasPorMarca(unittest.TestCase):
     def test_sin_planilla_propia_solo_multimarca(self):
         self.assertEqual(listas_habilitadas([]), ['multimarca'])
         self.assertEqual(listas_habilitadas(['OTRO']), ['multimarca'])
+
+
+class ClavesDeEjemplo(unittest.TestCase):
+    def test_la_del_compose_y_la_del_codigo_cuentan_como_de_ejemplo(self):
+        for clave, de_ejemplo in (('cambiar-esta-clave', True), ('neostar-admin', True),
+                                  ('una-propia', False)):
+            with self.subTest(clave=clave), mock.patch.dict(os.environ, {'ADMIN_PASSWORD': clave}):
+                self.assertEqual(admin.usando_default(), de_ejemplo)
+        sin_clave = {k: v for k, v in os.environ.items() if k != 'ADMIN_PASSWORD'}
+        with mock.patch.dict(os.environ, sin_clave, clear=True):
+            self.assertTrue(admin.usando_default())
 
 
 class ConVieja(ConApi):

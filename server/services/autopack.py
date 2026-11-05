@@ -27,6 +27,10 @@ def clave_actual():
     return os.environ.get('AUTOPACK_PASSWORD') or CLAVE_DEFAULT
 
 
+def usando_default():
+    return clave_actual() == CLAVE_DEFAULT
+
+
 def identificar(email, clave):
     """Devuelve el nombre de la persona si el mail está habilitado y la clave es
     correcta; si no, None."""
