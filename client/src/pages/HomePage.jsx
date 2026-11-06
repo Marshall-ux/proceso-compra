@@ -8,8 +8,8 @@ import {
   EMPRESAS, LISTAS, MARCAS, UBICACIONES, esperaDesde, estadoDe, fmtFechaHora, fmtImporte,
 } from '../constants.js'
 import {
-  cerrarSesionAutopack, iniciarSesionAutopack, listarAutorizados, listarSolicitudes,
-  marcarAutopack, paraFirmar, sesionAutopack, urlExcel, urlZipLote,
+  avisarCajera, cerrarSesionAutopack, iniciarSesionAutopack, listarAutorizados, listarSolicitudes,
+  marcarAutopack, paraFirmar, sesionAutopack, sinAvisoCajera, urlExcel, urlZipLote,
 } from '../services/api.js'
 
 const SIN_FILTROS = {
@@ -47,6 +47,14 @@ export default function HomePage() {
   }, [])
 
   useEffect(() => { cargarMisFirmas(firmante) }, [firmante, cargarMisFirmas, lista])
+
+  // Autorizadas a las que no les salió el aviso a la cajera. Las ve cualquiera, para que
+  // alguien se entere; mandarlo lo hace administración. Se revisa con cada recarga de la
+  // lista, así una firma recién hecha desde acá aparece enseguida si falló.
+  const [sinAviso, setSinAviso] = useState([])
+  const [avisando, setAvisando] = useState(null)
+  const [resultadoAviso, setResultadoAviso] = useState(null)
+  useEffect(() => { sinAvisoCajera().then(setSinAviso).catch(() => {}) }, [lista])
 
   const elegirFirmante = (id) => {
     setFirmante(id)
@@ -120,6 +128,39 @@ export default function HomePage() {
     }
   }
 
+  // "Avisar a la cajera": sin la sesión de administración, primero la pide (y después lo
+  // manda solo). Se lee la sesión guardada y no el estado, que recién se actualiza al login.
+  const mandarAviso = async (s) => {
+    setResultadoAviso(null)
+    if (!sesionAutopack()) {
+      setApError('')
+      setLoginAutopack({ avisar: s })
+      return
+    }
+    setAvisando(s.id)
+    try {
+      const r = await avisarCajera(s.id)
+      setResultadoAviso({
+        tipo: 'ok',
+        texto: r.destinatarios.length
+          ? `Listo: la #${s.id} le avisó a ${r.destinatarios.join(', ')}.`
+          : `La #${s.id} no tiene cajera configurada para su razón social: quedó como avisada, sin mail.`,
+      })
+    } catch (err) {
+      if (err.status === 401) {
+        cerrarSesionAutopack()
+        setAutopack(null)
+        setApError('')
+        setLoginAutopack({ avisar: s })
+      } else {
+        setResultadoAviso({ tipo: 'error', texto: err.message })
+      }
+    } finally {
+      setAvisando(null)
+      sinAvisoCajera().then(setSinAviso).catch(() => {})
+    }
+  }
+
   const entrarAutopack = async (e) => {
     e.preventDefault()
     setApEntrando(true)
@@ -131,6 +172,7 @@ export default function HomePage() {
       const pendiente = loginAutopack
       setLoginAutopack(null)
       if (pendiente?.s) guardarAutopack(pendiente.s, pendiente.valor)
+      if (pendiente?.avisar) mandarAviso(pendiente.avisar)
     } catch (err) {
       setApError(err.message)
     } finally {
@@ -166,6 +208,41 @@ export default function HomePage() {
           + Nueva solicitud
         </button>
       </div>
+
+      {/* Autorizadas sin aviso a la cajera: no debería aparecer nunca; si aparece, que se vea. */}
+      {sinAviso.length > 0 && (
+        <div className="alert alert--warning sin-aviso">
+          <strong>
+            ⚠ {sinAviso.length === 1
+              ? 'Una solicitud autorizada no le avisó'
+              : `${sinAviso.length} solicitudes autorizadas no le avisaron`} a la cajera.
+          </strong>{' '}
+          Administración puede mandar el aviso desde acá.
+          <div className="sin-aviso__lista">
+            {sinAviso.map((s) => (
+              <div key={s.id} className="sin-aviso__item">
+                <Link to={`/solicitudes/${s.id}`} className="sin-aviso__id">#{s.id}</Link>
+                <span className="sin-aviso__prov">{s.proveedor_nombre || 'sin proveedor'}</span>
+                <span>{fmtImporte(s.monto_total, s.moneda)}</span>
+                <span className="espera">firmada {fmtFechaHora(s.firmada)}</span>
+                <button
+                  type="button" className="btn btn--ghost btn--sm"
+                  disabled={avisando !== null} onClick={() => mandarAviso(s)}
+                >
+                  {avisando === s.id
+                    ? <><span className="spinner spinner--dark" /> Avisando…</>
+                    : 'Avisar a la cajera'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {resultadoAviso && (
+        <div className={`alert alert--${resultadoAviso.tipo === 'error' ? 'error' : 'ok'}`}>
+          {resultadoAviso.texto}
+        </div>
+      )}
 
       {/* Acceso rápido del firmante */}
       <div className="card firmante-card">
@@ -474,10 +551,15 @@ export default function HomePage() {
       {loginAutopack && (
         <div className="modal-fondo" onClick={() => !apEntrando && setLoginAutopack(null)}>
           <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={entrarAutopack}>
-            <div className="card__title" style={{ marginBottom: '0.3rem' }}>Autopack</div>
+            <div className="card__title" style={{ marginBottom: '0.3rem' }}>
+              {loginAutopack.avisar ? 'Avisar a la cajera' : 'Autopack'}
+            </div>
             <p className="card__hint">
-              Solo administración puede marcar Autopack. Ingresá tu mail y la clave: se te pide
-              una sola vez mientras tengas abierta esta pestaña.
+              {loginAutopack.avisar
+                ? `Mandar el aviso de la #${loginAutopack.avisar.id} lo hace solo administración. `
+                  + 'Ingresá tu mail y la clave de Autopack'
+                : 'Solo administración puede marcar Autopack. Ingresá tu mail y la clave'}
+              : se te pide una sola vez mientras tengas abierta esta pestaña.
             </p>
             {apError && <div className="alert alert--error">{apError}</div>}
             <div className="field">

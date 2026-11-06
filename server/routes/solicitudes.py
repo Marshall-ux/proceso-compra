@@ -300,7 +300,10 @@ def autorizar_lote():
         except ErrorAutorizante as e:
             return jsonify({'error': e.mensaje, **e.extra}), e.codigo
 
-        firmadas, salteadas, avisos = [], [], []
+        # Las advertencias de tope NO pueden llamarse `avisos`: taparían al módulo de
+        # avisos por mail y el aviso a las cajeras de abajo reventaría (pasó del 21-09
+        # al 06-11-2026: ninguna solicitud firmada en lote le avisó a la cajera).
+        firmadas, salteadas, advertencias = [], [], []
         for sid in ids:
             solicitud = conn.execute('SELECT * FROM solicitudes WHERE id = ?', (sid,)).fetchone()
             if not solicitud:
@@ -310,8 +313,8 @@ def autorizar_lote():
             if ok:
                 firmadas.append(sid)
                 if excedio:
-                    avisos.append(f'Solicitud #{sid}: supera el tope de '
-                                  f'$ {fmt_money(autorizado["monto_autorizado"])}.')
+                    advertencias.append(f'Solicitud #{sid}: supera el tope de '
+                                        f'$ {fmt_money(autorizado["monto_autorizado"])}.')
             else:
                 salteadas.append({'id': sid, 'motivo': motivo})
         conn.commit()
@@ -327,7 +330,7 @@ def autorizar_lote():
         'autorizante': nombre,
         'firmadas': firmadas,
         'salteadas': salteadas,
-        'avisos': avisos,
+        'avisos': advertencias,
         'resumen': f'{nombre} firmó {len(firmadas)} de {len(ids)} solicitudes.',
     })
 
@@ -370,6 +373,36 @@ def marcar_autopack(solicitud_id):
         conn.close()
     return jsonify({'ok': True, 'autopack_ok': valor,
                     'autopack_por': row['autopack_por'], 'autopack_fecha': row['autopack_fecha']})
+
+
+# ------------------------- avisos a la cajera que no salieron -------------------------
+@bp.route('/solicitudes/sin-aviso-cajera', methods=['GET'])
+def sin_aviso_cajera():
+    """Autorizadas a las que nunca les salió el aviso a la cajera: el inicio las muestra
+    a todos, para que alguien se entere (ver services/avisos.py)."""
+    return jsonify(avisos.sin_aviso_a_cajeras())
+
+
+@bp.route('/solicitudes/<int:solicitud_id>/avisar-cajera', methods=['POST'])
+def avisar_cajera(solicitud_id):
+    """Administración manda a mano el aviso a la cajera que no salió. Con la misma
+    sesión que Autopack (headers X-Autopack-Email / X-Autopack-Password)."""
+    nombre = autopack.identificar(request.headers.get('X-Autopack-Email'),
+                                  request.headers.get('X-Autopack-Password'))
+    if not nombre:
+        return jsonify({'error': 'Solo administración puede mandar el aviso: '
+                                 'ingresá tu mail y la clave'}), 401
+    solicitud = svc.obtener(solicitud_id)
+    resultado = avisos.avisar_pendiente_a_cajeras(solicitud, request) if solicitud else None
+    if resultado is None:
+        return jsonify({'error': 'Esta solicitud no tiene un aviso pendiente a la cajera '
+                                 '(puede que ya se haya mandado)'}), 409
+    destinos, enviados = resultado
+    if destinos and not enviados:
+        return jsonify({'error': 'No salió el mail a la cajera. Probá de nuevo en un rato.'}), 502
+    log.info('Aviso a cajeras de #%s mandado a mano por %s: %s de %s',
+             solicitud_id, nombre, enviados, len(destinos))
+    return jsonify({'ok': True, 'destinatarios': destinos, 'enviados': enviados})
 
 
 # ------------------------------- pagos imputados ----------------------------

@@ -12,7 +12,8 @@ from unittest import mock
 
 import pdfplumber
 
-from services import avisos
+from models import database
+from services import autopack, avisos
 from services import solicitudes as svc
 from services.pdf_fill import generar_pdf
 from tests.apoyo import PIN, ConApi, ConBase, sin_env_cajas
@@ -115,6 +116,20 @@ class CircuitoCompleto(ConApi):
         # Santa Fe + HIKARI
         self.assertEqual(self.mails, ['dmorelli@neostar.com.ar'])
 
+    def test_firma_en_lote_avisa_a_la_cajera(self):
+        # Del 21-09 al 06-11-2026 la firma en lote guardaba la firma, devolvía 500 y no
+        # le avisaba a nadie: la solicitud quedaba autorizada sin cajeras_notificado_at.
+        ids = [self.alta(), self.alta(ubicacion='rosario')]
+        r = self.api.post('/api/solicitudes/autorizar-lote',
+                          json={'autorizado_id': self.uno, 'pin': PIN, 'ids': ids})
+        self.assertEqual(r.status_code, 200, r.get_json())
+        self.assertEqual(r.get_json()['firmadas'], ids)
+        self.assertEqual(r.get_json()['avisos'], [])
+        # Santa Fe + HIKARI, Rosario + HIKARI
+        self.assertEqual(self.mails, ['dmorelli@neostar.com.ar', 'bcoll@neostar.com.ar'])
+        for sid in ids:
+            self.assertTrue(svc.obtener(sid)['cajeras_notificado_at'])
+
     def test_alta_con_dos_firmantes_se_rechaza(self):
         r = self.api.post('/api/solicitudes', json=self.datos(avisar_a=[self.uno, self.otro]))
         self.assertEqual(r.status_code, 400)
@@ -124,6 +139,70 @@ class CircuitoCompleto(ConApi):
         r = self.api.post('/api/solicitudes', json=self.datos(ubicacion=''))
         self.assertEqual(r.status_code, 400)
         self.assertIn('Elegí la ubicación (Rosario o Santa Fe)', r.get_json()['errores'])
+
+
+class AvisoPendienteACajeras(ConApi):
+    """El inicio muestra a todos las autorizadas sin aviso a la cajera; administración
+    lo manda con un botón."""
+
+    def autorizada_sin_aviso(self, firmada=None):
+        """Autorizada como si el aviso se hubiera cortado antes de marcar."""
+        sid = self.alta()
+        self.assertEqual(self.firmar(sid, self.uno).status_code, 200)
+        conn = database.get_db()
+        try:
+            conn.execute('UPDATE solicitudes SET cajeras_notificado_at = NULL WHERE id = ?', (sid,))
+            if firmada:
+                conn.execute('UPDATE autorizaciones SET fecha = ? WHERE solicitud_id = ?', (firmada, sid))
+            conn.commit()
+        finally:
+            conn.close()
+        self.mails.clear()
+        return sid
+
+    def pendientes(self):
+        return [s['id'] for s in self.api.get('/api/solicitudes/sin-aviso-cajera').get_json()]
+
+    def avisar(self, sid, clave=None):
+        return self.api.post(f'/api/solicitudes/{sid}/avisar-cajera', headers={
+            'X-Autopack-Email': 'bcoll@neostar.com.ar',
+            'X-Autopack-Password': autopack.clave_actual() if clave is None else clave})
+
+    def test_lista_solo_autorizadas_sin_aviso_desde_el_control(self):
+        sin_aviso = self.autorizada_sin_aviso()
+        self.autorizada_sin_aviso(firmada='2026-11-04 18:00:00')   # de las 46: no se reenvían
+        avisada = self.alta()
+        self.firmar(avisada, self.uno)
+        self.alta()                                                # pendiente
+        self.assertEqual(self.pendientes(), [sin_aviso])
+
+    def test_sin_sesion_de_administracion_no_se_manda(self):
+        sid = self.autorizada_sin_aviso()
+        self.assertEqual(self.avisar(sid, clave='mal').status_code, 401)
+        self.assertEqual(self.mails, [])
+        self.assertEqual(self.pendientes(), [sid])
+
+    def test_administracion_lo_manda_y_sale_del_inicio(self):
+        sid = self.autorizada_sin_aviso()
+        r = self.avisar(sid)
+        self.assertEqual(r.status_code, 200, r.get_json())
+        self.assertEqual(r.get_json()['destinatarios'], ['dmorelli@neostar.com.ar'])
+        self.assertEqual(self.mails, ['dmorelli@neostar.com.ar'])
+        self.assertEqual(self.pendientes(), [])
+        # Un segundo clic (u otra pestaña) no lo repite.
+        self.assertEqual(self.avisar(sid).status_code, 409)
+        self.assertEqual(self.mails, ['dmorelli@neostar.com.ar'])
+
+    def test_no_se_puede_mandar_el_de_una_de_antes_del_control(self):
+        sid = self.autorizada_sin_aviso(firmada='2026-11-04 18:00:00')
+        self.assertEqual(self.avisar(sid).status_code, 409)
+        self.assertEqual(self.mails, [])
+
+    def test_si_no_sale_el_mail_sigue_en_el_inicio(self):
+        sid = self.autorizada_sin_aviso()
+        with mock.patch.object(avisos, 'enviar_mail', return_value=False):
+            self.assertEqual(self.avisar(sid).status_code, 502)
+        self.assertEqual(self.pendientes(), [sid])
 
 
 class SoloFirmaElElegido(ConApi):

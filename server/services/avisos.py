@@ -156,6 +156,65 @@ def _marcar(solicitud_id, campo):
         conn.close()
 
 
+def _desmarcar(solicitud_id, campo):
+    """Vuelve a dejar la transicion como no avisada (ver `avisar_pendiente_a_cajeras`)."""
+    assert campo in ('notificado_at', 'cajeras_notificado_at')
+    conn = get_db()
+    try:
+        conn.execute(f'UPDATE solicitudes SET {campo} = NULL WHERE id = ?', (solicitud_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# Desde cuando se controla que cada autorizada le haya avisado a la cajera (ver
+# `sin_aviso_a_cajeras`). Deja afuera las 46 que la firma en lote no aviso entre el
+# 21-09 y el 04-11-2026 (se decidio no reenviarlas). Es el momento en que el servidor
+# paso a hora argentina: las fechas de firma anteriores estan guardadas en UTC.
+CONTROL_CAJERAS_DESDE = '2026-11-05 15:35:00'
+
+
+def sin_aviso_a_cajeras(solicitud_id=None):
+    """Autorizadas cuyo aviso a las cajeras nunca arranco (sin marca), firmadas desde
+    CONTROL_CAJERAS_DESDE. Las muestra el inicio para que alguien se entere.
+
+    Como la marca se pone ANTES de mandar, que falte quiere decir que el aviso se
+    corto antes de empezar (como pasaba con la firma en lote): no salio ningun mail,
+    y mandarlo ahora no duplica nada. Con `solicitud_id`, solo esa (si esta)."""
+    filtro, params = ('AND s.id = ?', [solicitud_id]) if solicitud_id is not None else ('', [])
+    conn = get_db()
+    try:
+        filas = conn.execute(
+            'SELECT s.id, s.proveedor_nombre, s.monto_total, s.moneda, MAX(a.fecha) AS firmada '
+            'FROM solicitudes s JOIN autorizaciones a ON a.solicitud_id = s.id '
+            "WHERE s.estado = 'autorizada' "
+            "AND (s.cajeras_notificado_at IS NULL OR s.cajeras_notificado_at = '') "
+            f'{filtro} GROUP BY s.id HAVING MAX(a.fecha) >= ? ORDER BY firmada',
+            params + [CONTROL_CAJERAS_DESDE]).fetchall()
+    finally:
+        conn.close()
+    return [dict(f) for f in filas]
+
+
+def avisar_pendiente_a_cajeras(solicitud, request=None):
+    """El boton "Avisar a la cajera" del inicio: manda el aviso de una solicitud de
+    `sin_aviso_a_cajeras`. Devuelve (destinos, enviados), o None si no estaba
+    pendiente (ya se mando, por ejemplo desde otra pestaña, o es de antes del control).
+
+    A diferencia del aviso automatico, si no sale ningun mail se saca la marca: la
+    solicitud sigue en el inicio y se puede volver a probar. Aca hay una persona
+    mirando, que ve el error, y no un aviso best-effort que nadie mira."""
+    if not sin_aviso_a_cajeras(solicitud['id']):
+        return None
+    if not _marcar(solicitud['id'], 'cajeras_notificado_at'):
+        return None
+    destinos = destinatarios_cajeras(solicitud)
+    enviados = _mail_autorizada(solicitud, destinos, request) if destinos else 0
+    if destinos and not enviados:
+        _desmarcar(solicitud['id'], 'cajeras_notificado_at')
+    return destinos, enviados
+
+
 def _link(solicitud_id, request=None):
     return base_url(request) + RUTA_DETALLE.format(id=solicitud_id)
 
@@ -373,7 +432,10 @@ def notificar_autorizada(solicitud, request=None):
         log.info('Solicitud #%s autorizada sin cajeras configuradas para %s',
                  solicitud['id'], solicitud.get('empresas'))
         return 0
+    return _mail_autorizada(solicitud, destinos, request)
 
+
+def _mail_autorizada(solicitud, destinos, request=None):
     link = _link(solicitud['id'], request)
     proveedor = solicitud.get('proveedor_nombre') or 'sin proveedor'
     monto = fmt_importe(solicitud.get('monto_total'), solicitud.get('moneda'))

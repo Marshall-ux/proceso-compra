@@ -457,6 +457,17 @@ table.data { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .para-firmar-item__marca { color: var(--text-muted); font-weight: 400; }
 .para-firmar-item__monto { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
 
+/* Autorizadas sin aviso a la cajera (arriba de "Para firmar"). */
+.sin-aviso__lista { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.6rem; }
+.sin-aviso__item {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.8rem;
+  padding: 0.45rem 0.7rem; border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.6);
+  color: var(--text);
+}
+.sin-aviso__id { font-weight: 800; color: var(--green-dark); }
+.sin-aviso__prov { flex: 1; min-width: 8rem; font-weight: 600; }
+.sin-aviso__item .btn { margin-left: auto; }
+
 /* ------------------------------- pagos ---------------------------------- */
 .pagos-resumen {
   display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center;
