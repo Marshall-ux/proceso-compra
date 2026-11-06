@@ -1,22 +1,28 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import PanelLote from '../components/PanelLote.jsx'
-import robot from '../assets/robot-id.png'
-import { EMPRESAS, LISTAS, esperaDesde, estadoDe, fmtFechaHora, fmtImporte } from '../constants.js'
+import {
+  EMPRESAS, LISTAS, MARCAS, UBICACIONES, esperaDesde, estadoDe, fmtFechaHora, fmtImporte,
+} from '../constants.js'
 import {
   cerrarSesionAutopack, iniciarSesionAutopack, listarAutorizados, listarSolicitudes,
-  marcarAutopack, paraFirmar, sesionAutopack, urlZipLote,
+  marcarAutopack, paraFirmar, sesionAutopack, urlExcel, urlZipLote,
 } from '../services/api.js'
+
+const SIN_FILTROS = {
+  q: '', estado: '', empresa: '', marca: '', ubicacion: '', urgente: false, desde: '', hasta: '',
+}
 
 export default function HomePage() {
   const navigate = useNavigate()
-  const [solicitudes, setSolicitudes] = useState([])
-  const [busqueda, setBusqueda] = useState('')
-  const [estado, setEstado] = useState('')
-  const [empresa, setEmpresa] = useState('')
+  // La lista viene de a una página (50), con los filtros aplicados en el servidor.
+  const [lista, setLista] = useState({ solicitudes: [], total: 0, pagina: 1, por_pagina: 50 })
+  const [filtros, setFiltros] = useState(SIN_FILTROS)
+  const [pagina, setPagina] = useState(1)
   const [cargando, setCargando] = useState(true)
   const [seleccion, setSeleccion] = useState([])
   const [mensaje, setMensaje] = useState(null)
+  const solicitudes = lista.solicitudes
 
   // Acceso rápido del firmante (sin login): elige su nombre, el navegador lo recuerda.
   const [autorizados, setAutorizados] = useState([])
@@ -37,7 +43,7 @@ export default function HomePage() {
     }
   }, [])
 
-  useEffect(() => { cargarMisFirmas(firmante) }, [firmante, cargarMisFirmas, solicitudes])
+  useEffect(() => { cargarMisFirmas(firmante) }, [firmante, cargarMisFirmas, lista])
 
   const elegirFirmante = (id) => {
     setFirmante(id)
@@ -47,42 +53,57 @@ export default function HomePage() {
     else localStorage.removeItem('firmante')
   }
 
+  // Lo que va al servidor (también arma el link del Excel, con los mismos filtros).
+  const consulta = { ...filtros, urgente: filtros.urgente ? '1' : '' }
+  const hayFiltros = Object.entries(filtros).some(([k, v]) => v !== SIN_FILTROS[k])
+
   const cargar = useCallback(async () => {
     setCargando(true)
     try {
-      setSolicitudes(await listarSolicitudes({ q: busqueda, estado, empresa }))
+      setLista(await listarSolicitudes({ ...filtros, urgente: filtros.urgente ? '1' : '', pagina }))
     } finally {
       setCargando(false)
     }
-  }, [busqueda, estado, empresa])
+  }, [filtros, pagina])
 
   useEffect(() => {
     const t = setTimeout(cargar, 250)
     return () => clearTimeout(t)
   }, [cargar])
 
+  // Cambiar un filtro vuelve a la primera página.
+  const filtrar = (campo, valor) => {
+    setFiltros((f) => ({ ...f, [campo]: valor }))
+    setPagina(1)
+  }
+
   const alternar = (id) =>
     setSeleccion((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))
 
-  const alternarTodas = () =>
-    setSeleccion((s) => (s.length === solicitudes.length ? [] : solicitudes.map((x) => x.id)))
+  const todasElegidas = solicitudes.length > 0 && solicitudes.every((s) => seleccion.includes(s.id))
+  const alternarTodas = () => setSeleccion((s) => (todasElegidas
+    ? s.filter((id) => !solicitudes.some((x) => x.id === id))
+    : [...new Set([...s, ...solicitudes.map((x) => x.id)])]))
 
   // Autopack lo tilda solo administración: mail + clave, pedidos una vez por pestaña.
+  // Para el resto la columna es de solo lectura.
   const [autopack, setAutopack] = useState(sesionAutopack)
-  const [loginAutopack, setLoginAutopack] = useState(null)   // { s, valor } que espera el login
+  const [loginAutopack, setLoginAutopack] = useState(null)   // {} o { s, valor } que espera el login
   const [apEmail, setApEmail] = useState('')
   const [apClave, setApClave] = useState('')
   const [apError, setApError] = useState('')
   const [apEntrando, setApEntrando] = useState(false)
 
+  const actualizarFila = (id, cambios) => setLista((l) => ({
+    ...l, solicitudes: l.solicitudes.map((x) => (x.id === id ? { ...x, ...cambios } : x)),
+  }))
+
   // El tilde se guarda al instante; se refleja localmente para no recargar todo.
   const guardarAutopack = async (s, valor) => {
-    setSolicitudes((lista) =>
-      lista.map((x) => (x.id === s.id ? { ...x, autopack_ok: valor ? 1 : 0 } : x)))
+    actualizarFila(s.id, { autopack_ok: valor ? 1 : 0 })
     try {
       const r = await marcarAutopack(s.id, valor)
-      setSolicitudes((lista) => lista.map((x) => (x.id === s.id
-        ? { ...x, autopack_por: r.autopack_por, autopack_fecha: r.autopack_fecha } : x)))
+      actualizarFila(s.id, { autopack_por: r.autopack_por, autopack_fecha: r.autopack_fecha })
     } catch (e) {
       cargar()
       if (e.status === 401) {
@@ -96,14 +117,6 @@ export default function HomePage() {
     }
   }
 
-  const cambiarAutopack = (s, valor) => {
-    if (autopack) guardarAutopack(s, valor)
-    else {
-      setApError('')
-      setLoginAutopack({ s, valor })
-    }
-  }
-
   const entrarAutopack = async (e) => {
     e.preventDefault()
     setApEntrando(true)
@@ -114,7 +127,7 @@ export default function HomePage() {
       setApClave('')
       const pendiente = loginAutopack
       setLoginAutopack(null)
-      if (pendiente) guardarAutopack(pendiente.s, pendiente.valor)
+      if (pendiente?.s) guardarAutopack(pendiente.s, pendiente.valor)
     } catch (err) {
       setApError(err.message)
     } finally {
@@ -128,19 +141,19 @@ export default function HomePage() {
   }
 
   const persona = autorizados.find((a) => String(a.id) === String(firmante))
+  const desde = (lista.pagina - 1) * lista.por_pagina
+  const ultimaPagina = Math.max(1, Math.ceil(lista.total / lista.por_pagina))
 
   return (
     <>
-      <div className="hero">
-        <div className="hero__text">
+      <div className="encabezado">
+        <div>
           <div className="hero__eyebrow">Neostar · Compras</div>
-          <h1 className="hero__title">Autorizaciones de <span>compra</span></h1>
-          <p className="hero__subtitle">
-            Subí la factura del proveedor, revisá los datos y elegí quién la firma.
-            El formulario F 8.4-01 se completa solo.
-          </p>
+          <h1 className="encabezado__titulo">Autorizaciones de <span>compra</span></h1>
         </div>
-        <img src={robot} alt="" className="hero__robot" />
+        <button className="btn btn--primary" onClick={() => navigate('/nueva')}>
+          + Nueva solicitud
+        </button>
       </div>
 
       {/* Acceso rápido del firmante */}
@@ -222,39 +235,50 @@ export default function HomePage() {
 
       <div className="card">
         <div className="toolbar">
-          <div className="toolbar__actions">
-            <input
-              type="text" className="cell-input" placeholder="Buscar proveedor, CUIT, marca, razón social…"
-              value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
-              style={{ border: '1px solid var(--border-strong)', minWidth: 260, padding: '0.5rem 0.7rem' }}
-            />
-            <select
-              value={estado} onChange={(e) => setEstado(e.target.value)}
-              style={{
-                padding: '0.5rem 0.7rem', borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--border-strong)', fontFamily: 'inherit',
-              }}
-            >
-              <option value="">Todas</option>
-              <option value="pendiente">Pendientes</option>
-              <option value="autorizada">Autorizadas</option>
-              <option value="observada">Observadas (devueltas)</option>
-              <option value="rechazada">Rechazadas</option>
-            </select>
-            <select
-              value={empresa} onChange={(e) => setEmpresa(e.target.value)}
-              style={{
-                padding: '0.5rem 0.7rem', borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--border-strong)', fontFamily: 'inherit',
-              }}
-            >
-              <option value="">Todas las razones sociales</option>
-              {EMPRESAS.map((e) => <option key={e} value={e}>{e}</option>)}
-            </select>
-          </div>
-          <button className="btn btn--primary" onClick={() => navigate('/nueva')}>
-            + Nueva solicitud
-          </button>
+          <input
+            type="text" className="filtro filtro--busqueda" placeholder="Buscar proveedor, CUIT, factura, quién la pidió…"
+            value={filtros.q} onChange={(e) => filtrar('q', e.target.value)}
+          />
+          <a className="btn btn--ghost btn--sm" href={urlExcel(consulta)}
+             title="Todas las solicitudes que cumplen los filtros, en una planilla de Excel">
+            ⬇ Exportar a Excel
+          </a>
+        </div>
+        <div className="filtros">
+          <select className="filtro" value={filtros.estado} onChange={(e) => filtrar('estado', e.target.value)}>
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendientes</option>
+            <option value="autorizada">Autorizadas</option>
+            <option value="observada">Observadas (devueltas)</option>
+            <option value="rechazada">Rechazadas</option>
+          </select>
+          <select className="filtro" value={filtros.empresa} onChange={(e) => filtrar('empresa', e.target.value)}>
+            <option value="">Todas las razones sociales</option>
+            {EMPRESAS.map((e) => <option key={e} value={e}>{e}</option>)}
+          </select>
+          <select className="filtro" value={filtros.marca} onChange={(e) => filtrar('marca', e.target.value)}>
+            <option value="">Todas las marcas</option>
+            {MARCAS.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <select className="filtro" value={filtros.ubicacion} onChange={(e) => filtrar('ubicacion', e.target.value)}>
+            <option value="">Rosario y Santa Fe</option>
+            {UBICACIONES.map((u) => <option key={u.valor} value={u.valor}>{u.etiqueta}</option>)}
+          </select>
+          <label className="filtro filtro--check">
+            <input type="checkbox" checked={filtros.urgente} onChange={(e) => filtrar('urgente', e.target.checked)} />
+            Solo urgentes
+          </label>
+          <label className="filtro filtro--fechas">
+            Cargadas del
+            <input type="date" value={filtros.desde} onChange={(e) => filtrar('desde', e.target.value)} />
+            al
+            <input type="date" value={filtros.hasta} onChange={(e) => filtrar('hasta', e.target.value)} />
+          </label>
+          {hayFiltros && (
+            <button type="button" className="btn-link" onClick={() => { setFiltros(SIN_FILTROS); setPagina(1) }}>
+              Limpiar filtros
+            </button>
+          )}
         </div>
 
         {mensaje && (
@@ -277,27 +301,30 @@ export default function HomePage() {
           </div>
         )}
 
-        {cargando ? (
+        {cargando && solicitudes.length === 0 ? (
           <div className="empty"><span className="spinner spinner--dark" /> Cargando…</div>
         ) : solicitudes.length === 0 ? (
           <div className="empty">
             <div className="empty__icon">📄</div>
-            <p>No hay solicitudes todavía.</p>
-            <p style={{ marginTop: '0.6rem' }}>
-              <Link to="/nueva">Subí una factura</Link> para empezar.
-            </p>
+            {hayFiltros ? (
+              <p>Ninguna solicitud cumple estos filtros.</p>
+            ) : (
+              <>
+                <p>No hay solicitudes todavía.</p>
+                <p style={{ marginTop: '0.6rem' }}>
+                  <Link to="/nueva">Subí una factura</Link> para empezar.
+                </p>
+              </>
+            )}
           </div>
         ) : (
-          <div className="table-wrap">
+          <div className="table-wrap" style={{ opacity: cargando ? 0.6 : 1 }}>
             <table className="data">
               <thead>
                 <tr>
                   <th style={{ width: 34 }}>
-                    <input
-                      type="checkbox"
-                      checked={seleccion.length === solicitudes.length && solicitudes.length > 0}
-                      onChange={alternarTodas}
-                    />
+                    <input type="checkbox" checked={todasElegidas} onChange={alternarTodas}
+                           title="Elegir todas las de esta página" />
                   </th>
                   <th>#</th>
                   <th>Fecha</th>
@@ -327,7 +354,7 @@ export default function HomePage() {
                     <td>{s.fecha}</td>
                     <td>
                       {s.proveedor_nombre}
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      <div className="espera">
                         {s.facturas > 1 ? `${s.facturas} facturas` : s.factura_numero
                           ? `Factura ${s.factura_numero}` : ''}
                         {s.criticidad === 'urgente' && (
@@ -340,7 +367,7 @@ export default function HomePage() {
                       {(() => {
                         let n = 0
                         try { n = JSON.parse(s.marcas || '[]').length } catch { n = 0 }
-                        return n > 1 ? <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}> +{n - 1}</span> : null
+                        return n > 1 ? <span className="espera"> +{n - 1}</span> : null
                       })()}
                     </td>
                     <td className="num">{fmtImporte(s.monto_total, s.moneda)}</td>
@@ -372,15 +399,18 @@ export default function HomePage() {
                     <td>
                       <span className={`badge badge--${estadoDe(s.estado).badge}`}>{estadoDe(s.estado).etiqueta}</span>
                     </td>
-                    <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={!!s.autopack_ok}
-                        onChange={(e) => cambiarAutopack(s, e.target.checked)}
+                    <td onClick={(e) => autopack && e.stopPropagation()} style={{ textAlign: 'center' }}
                         title={s.autopack_ok && s.autopack_por
-                          ? `Tildado por ${s.autopack_por} el ${fmtFechaHora(s.autopack_fecha)}`
-                          : 'Marcar cuando la operación ya se cargó en Autopack (solo administración)'}
-                      />
+                          ? `Cargado en Autopack: lo marcó ${s.autopack_por} el ${fmtFechaHora(s.autopack_fecha)}`
+                          : 'Todavía no se cargó en Autopack'}>
+                      {autopack ? (
+                        <input
+                          type="checkbox" checked={!!s.autopack_ok}
+                          onChange={(e) => guardarAutopack(s, e.target.checked)}
+                        />
+                      ) : s.autopack_ok
+                        ? <span className="autopack-si">✓</span>
+                        : <span className="autopack-no">—</span>}
                     </td>
                   </tr>
                 ))}
@@ -388,16 +418,39 @@ export default function HomePage() {
             </table>
           </div>
         )}
+
+        {lista.total > 0 && (
+          <div className="paginacion">
+            <span className="toolbar__info">
+              {lista.total <= lista.por_pagina
+                ? `${lista.total} ${lista.total === 1 ? 'solicitud' : 'solicitudes'}`
+                : `Mostrando ${desde + 1}–${desde + solicitudes.length} de ${lista.total}`}
+              {hayFiltros && ' con estos filtros'}
+            </span>
+            {ultimaPagina > 1 && (
+              <div className="toolbar__actions">
+                <button className="btn btn--ghost btn--sm" disabled={pagina <= 1}
+                        onClick={() => setPagina((p) => p - 1)}>‹ Anterior</button>
+                <span className="toolbar__info">Página {lista.pagina} de {ultimaPagina}</span>
+                <button className="btn btn--ghost btn--sm" disabled={pagina >= ultimaPagina}
+                        onClick={() => setPagina((p) => p + 1)}>Siguiente ›</button>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="field__nota" style={{ marginTop: '0.9rem' }}>
-          La columna <strong>Autopack</strong> es el control de administración: se tilda cuando la
-          operación ya se cargó en el otro sistema. Solo la puede tildar administración, con su mail
-          y la clave.
-          {autopack && (
-            <>{' '}Autopack: <strong>{autopack.nombre}</strong> ·{' '}
-              <button type="button" className="btn btn--ghost btn--sm" onClick={salirAutopack}>
-                Salir
-              </button>
+          La columna <strong>Autopack</strong> la marca administración cuando la operación ya se
+          cargó en el otro sistema.{' '}
+          {autopack ? (
+            <>Marcando como <strong>{autopack.nombre}</strong> ·{' '}
+              <button type="button" className="btn-link" onClick={salirAutopack}>Salir</button>
             </>
+          ) : (
+            <button type="button" className="btn-link"
+                    onClick={() => { setApError(''); setLoginAutopack({}) }}>
+              Soy de administración: marcar Autopack
+            </button>
           )}
         </div>
       </div>
@@ -407,8 +460,8 @@ export default function HomePage() {
           <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={entrarAutopack}>
             <div className="card__title" style={{ marginBottom: '0.3rem' }}>Autopack</div>
             <p className="card__hint">
-              Solo administración puede {loginAutopack.valor ? 'tildar' : 'destildar'} Autopack.
-              Ingresá tu mail y la clave: se te pide una sola vez mientras tengas abierta esta pestaña.
+              Solo administración puede marcar Autopack. Ingresá tu mail y la clave: se te pide
+              una sola vez mientras tengas abierta esta pestaña.
             </p>
             {apError && <div className="alert alert--error">{apError}</div>}
             <div className="field">

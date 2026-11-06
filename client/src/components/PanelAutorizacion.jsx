@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { LISTAS, estadoDe, fmtFechaHora, fmtImporte, fmtMoney } from '../constants.js'
 import { autorizar, definirPin, quitarAutorizacion, revisarSolicitud } from '../services/api.js'
+import { useVentana } from './Ventana.jsx'
 
 // Quién queda seleccionado al abrir: si una sola persona puede firmar (lo normal, el
 // firmante elegido) o si es quien eligió su nombre en "Soy:" del inicio, va directo al
@@ -36,6 +37,7 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
   // Cuando no está de acuerdo: devolver para corregir ('observar') o rechazar.
   const [modo, setModo] = useState('')
   const [motivo, setMotivo] = useState('')
+  const { confirmar, ventana } = useVentana()
 
   const firmas = solicitud.autorizaciones || []
   const completa = solicitud.estado === 'autorizada'
@@ -95,7 +97,11 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
 
   const quitar = async (f) => {
     setError(''); setAviso('')
-    if (!confirm(`¿Quitar la firma de ${f.nombre}? Va a tener que volver a autorizar.`)) return
+    if (!(await confirmar({
+      titulo: `¿Quitar la firma de ${f.nombre}?`,
+      mensaje: 'Va a tener que volver a autorizarla.',
+      aceptar: 'Quitar firma', peligro: true,
+    }))) return
     try {
       onActualizar(await quitarAutorizacion(solicitud.id, f.id))
     } catch (e) {
@@ -153,6 +159,7 @@ export default function PanelAutorizacion({ solicitud, onActualizar }) {
 
   return (
     <div className="card">
+      {ventana}
       <div className="card__title">
         ✍️ Autorización
         {completa
