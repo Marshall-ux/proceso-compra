@@ -6,6 +6,15 @@ services:
     # Vuelve solo si se reinicia el servidor o se cae el proceso. (En producción lo
     # hacía un docker-compose.override.yml sin versionar; ya no hace falta.)
     restart: unless-stopped
+    # Estado en `docker ps` (healthy / unhealthy): cada 30 s consulta /api/health, que
+    # además lee la base. Tres fallas seguidas lo marcan unhealthy. Docker no lo reinicia
+    # por eso: es para verlo de un vistazo. Con Python porque la imagen slim no trae curl.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
     # El código va dentro de la imagen, no montado: corre exactamente lo que se
     # construyó. Solo se montan los datos, que tienen que sobrevivir a cada build.
     volumes:

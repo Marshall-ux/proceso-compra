@@ -108,6 +108,11 @@ docker compose down              # detener
 - Frontend: http://localhost:8092/proceso-compra/
 - Backend API: http://localhost:8092/proceso-compra/api
 
+`docker ps` muestra el estado del backend: `(healthy)` si contesta y puede leer la base,
+`(unhealthy)` tras tres fallas seguidas (se chequea cada 30 s contra `/api/health`) y
+`(health: starting)` el primer medio minuto. Docker no lo reinicia por estar unhealthy;
+la causa queda en `docker compose logs backend` ("health: la base no responde").
+
 ## Desplegar
 
 En el servidor, en `/opt/portal/portal-interno/proceso-compra`:

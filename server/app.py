@@ -1,5 +1,6 @@
 import logging
 import os
+import sqlite3
 
 from flask import Flask, jsonify
 from flask_cors import CORS
@@ -10,7 +11,7 @@ from flask_cors import CORS
 os.environ.setdefault('APP_NOMBRE', 'Autorizaciones de Compra')
 os.environ.setdefault('MAIL_FROM_NOMBRE', os.environ['APP_NOMBRE'])
 
-from models.database import init_db
+from models.database import get_db, init_db
 from services import admin, autopack, recordatorios
 from routes.autorizados import bp as autorizados_bp
 from routes.facturas import bp as facturas_bp
@@ -46,8 +47,20 @@ def crear_app():
     app.register_blueprint(solicitudes_bp, url_prefix='/api')
     app.register_blueprint(autorizados_bp, url_prefix='/api')
 
+    # Lo consulta el healthcheck de Docker (docker-compose.yml) para el estado que muestra
+    # `docker ps`. Además de que el proceso conteste, lee la base: con el volumen sin
+    # montar o la base rota, la app arranca igual pero no sirve, y tiene que verse.
     @app.route('/api/health')
     def health():
+        try:
+            conn = get_db()
+            try:
+                conn.execute('SELECT 1 FROM solicitudes LIMIT 1').fetchall()
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            log.exception('health: la base no responde')
+            return jsonify({'ok': False, 'error': 'la base no responde'}), 503
         return jsonify({'ok': True})
 
     return app
