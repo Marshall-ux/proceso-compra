@@ -219,6 +219,21 @@ export const marcarAutopack = (id, ok) => {
   })
 }
 
+// --- avisos a la cajera que no salieron: el inicio los muestra a todos ---
+export const sinAvisoCajera = () => pedir('/solicitudes/sin-aviso-cajera')
+
+// Lo manda solo administración, con la misma sesión que Autopack.
+export const avisarCajera = (id) => {
+  const sesion = sesionAutopack() || {}
+  return pedir(`/solicitudes/${id}/avisar-cajera`, {
+    method: 'POST',
+    headers: {
+      'X-Autopack-Email': sesion.email || '',
+      'X-Autopack-Password': sesion.clave || '',
+    },
+  })
+}
+
 // --- pagos imputados a una AGC ---
 export const crearPago = (id, payload) =>
   pedir(`/solicitudes/${id}/pagos`, {
