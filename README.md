@@ -177,7 +177,9 @@ npm run dev                   # http://localhost:5173 (proxy /api -> :5000)
 | Método | Endpoint | Descripción |
 |---|---|---|
 | POST | `/api/facturas/extraer` | Sube el PDF y devuelve los datos leídos |
-| GET | `/api/solicitudes` | Lista (filtros: `estado`, `q`) |
+| GET | `/api/solicitudes` | Lista de a 50, la más nueva primero (`pagina`; filtros: `estado`, `q`, `empresa`, `marca`, `ubicacion`, `urgente=1`, `desde`/`hasta` aaaa-mm-dd de carga). Devuelve `solicitudes`, `total`, `pagina`, `por_pagina` |
+| GET | `/api/solicitudes/excel` | La lista con los mismos filtros, toda, en Excel (.xlsx) |
+| GET | `/api/proveedores/:cuit` | Datos del proveedor tomados de sus solicitudes anteriores (para el alta) |
 | POST | `/api/solicitudes` | Crea |
 | GET | `/api/solicitudes/:id` | Detalle + autorizados habilitados |
 | PUT | `/api/solicitudes/:id` | Edita (borra las firmas existentes) |
@@ -327,3 +329,7 @@ al reiniciar se sincronizan cargos, montos y conceptos sin borrar los PIN.
   no corregirlo.
 - Los PDF (autorización, autorización + facturas, ZIP) se arman en memoria en cada
   pedido; no se guardan en disco.
+- **Inicio**: la lista viene de a 50, con filtros por estado, razón social, marca,
+  ubicación, urgencia y fechas de carga, y se exporta a Excel con esos mismos filtros. La
+  columna *Autopack* es de solo lectura; para marcarla, administración entra con su mail
+  y la clave ("Soy de administración: marcar Autopack").
