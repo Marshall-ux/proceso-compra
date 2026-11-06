@@ -70,6 +70,12 @@ export const listarSolicitudes = (params = {}) => {
   return pedir(`/solicitudes${qs ? `?${qs}` : ''}`)
 }
 
+// La lista con los mismos filtros de la pantalla, toda (sin paginar), en Excel.
+export const urlExcel = (filtros = {}) => {
+  const qs = new URLSearchParams(Object.entries(filtros).filter(([, v]) => v)).toString()
+  return `${BASE}/solicitudes/excel${qs ? `?${qs}` : ''}`
+}
+
 export const obtenerSolicitud = (id) => pedir(`/solicitudes/${id}`)
 
 // Pendientes que un autorizante puede firmar (acceso rápido del firmante).

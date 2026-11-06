@@ -81,7 +81,7 @@ class DevolverYRechazar(ConApi):
     def test_la_lista_muestra_quien_y_por_que(self):
         sid = self.alta()
         self.revisar(sid, self.uno, 'observar')
-        fila = {s['id']: s for s in self.api.get('/api/solicitudes').get_json()}[sid]
+        fila = {s['id']: s for s in self.api.get('/api/solicitudes').get_json()['solicitudes']}[sid]
         self.assertEqual(fila['revision_motivo'], 'falta el remito')
         self.assertEqual(fila['revision_por'], svc.obtener(sid)['avisados'][0])
 

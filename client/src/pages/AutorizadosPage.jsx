@@ -4,6 +4,7 @@ import {
   blanquearPin, cambiarActivoAutorizado, cambiarEmailAutorizado, claveAdmin, desbloquearAutorizado, generarCodigoAlta,
   listarAutorizados, verificarClaveAdmin,
 } from '../services/api.js'
+import { useVentana } from '../components/Ventana.jsx'
 
 // Consulta de las 4 planillas de autorizados (Nissan, Jeep, Kia, Multimarca)
 // y administración de sus PIN. Las acciones sensibles piden la clave de administración.
@@ -18,6 +19,7 @@ export default function AutorizadosPage() {
   const [desbloqueado, setDesbloqueado] = useState(!!claveAdmin())
   const [clave, setClave] = useState('')
   const [avisoDefault, setAvisoDefault] = useState(false)
+  const { confirmar, pedirTexto, ventana } = useVentana()
 
   const cargar = () => {
     setCargando(true)
@@ -67,8 +69,11 @@ export default function AutorizadosPage() {
   })
 
   const blanquear = conError(async (a) => {
-    if (!confirm(`¿Blanquear el PIN de ${a.nombre}?\n\nSe le va a generar un código nuevo que ` +
-                 `tenés que entregarle para que defina otro PIN.`)) return
+    if (!(await confirmar({
+      titulo: `¿Blanquear el PIN de ${a.nombre}?`,
+      mensaje: 'Se le genera un código nuevo que tenés que entregarle para que defina otro PIN.',
+      aceptar: 'Blanquear PIN', peligro: true,
+    }))) return
     setCodigo(await blanquearPin(a.id))
   })
 
@@ -77,16 +82,20 @@ export default function AutorizadosPage() {
   })
 
   const darDeBaja = conError(async (a) => {
-    if (!confirm(`¿Dar de baja a ${a.nombre}?\n\nNo va a poder autorizar más. Su historial se ` +
-                 `conserva y podés reactivarlo cuando quieras.`)) return
+    if (!(await confirmar({
+      titulo: `¿Dar de baja a ${a.nombre}?`,
+      mensaje: 'No va a poder autorizar más. Su historial se conserva y podés reactivarlo cuando quieras.',
+      aceptar: 'Dar de baja', peligro: true,
+    }))) return
     await cambiarActivoAutorizado(a.id, false)
   })
 
   const editarEmail = conError(async (a) => {
-    const email = prompt(`Mail de ${a.nombre} para el aviso de gastos a autorizar.
-
-` +
-                         `Dejalo vacío para que no se le pueda avisar.`, a.email || '')
+    const email = await pedirTexto({
+      titulo: `Mail de ${a.nombre}`,
+      mensaje: 'Le llega el aviso de los gastos que tiene que autorizar. Dejalo vacío para que no se le pueda avisar.',
+      etiqueta: 'Mail', valor: a.email || '', aceptar: 'Guardar',
+    })
     if (email === null) return
     await cambiarEmailAutorizado(a.id, email.trim())
   })
@@ -97,6 +106,7 @@ export default function AutorizadosPage() {
 
   return (
     <>
+      {ventana}
       <div className="hero" style={{ marginBottom: '1.6rem' }}>
         <div className="hero__text">
           <div className="hero__eyebrow">Referencia</div>
