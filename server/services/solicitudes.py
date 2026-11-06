@@ -1,6 +1,7 @@
 """Logica de negocio de las solicitudes (autorizaciones genericas)."""
 
 import json
+import re
 from datetime import datetime
 
 from models.database import get_db
@@ -325,46 +326,86 @@ def obtener(solicitud_id):
         conn.close()
 
 
-def listar(estado=None, busqueda=None, empresa=None):
-    """Lista para el inicio. Además de los datos, `firmante` (a quién espera: el firmante
-    elegido; vacío en las viejas, que firma cualquier habilitado) y `firmado_por`."""
+# Filtros de la lista del inicio (y del Excel), tal como los manda la pantalla.
+FILTROS = ('estado', 'q', 'empresa', 'marca', 'ubicacion', 'urgente', 'desde', 'hasta')
+POR_PAGINA = 50
+_FECHA_ISO = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+
+_COLUMNAS_LISTA = (
+    's.*, '
+    '(SELECT COUNT(*) FROM autorizaciones a WHERE a.solicitud_id = s.id) AS firmas, '
+    '(SELECT COUNT(*) FROM facturas f WHERE f.solicitud_id = s.id) AS facturas, '
+    "(SELECT group_concat(au.nombre, ', ') FROM autorizaciones a "
+    ' JOIN autorizados au ON au.id = a.autorizado_id WHERE a.solicitud_id = s.id) AS firmado_por, '
+    # La última devolución o rechazo: quién y por qué (se ve en la lista).
+    '(SELECT r.motivo FROM revisiones r WHERE r.solicitud_id = s.id '
+    ' ORDER BY r.id DESC LIMIT 1) AS revision_motivo, '
+    '(SELECT au.nombre FROM revisiones r JOIN autorizados au ON au.id = r.autorizado_id '
+    ' WHERE r.solicitud_id = s.id ORDER BY r.id DESC LIMIT 1) AS revision_por'
+)
+
+
+def _donde(filtros):
+    """WHERE de la lista según los filtros. Devuelve (sql, params). Las fechas `desde` y
+    `hasta` son de carga (aaaa-mm-dd, como las da el calendario); una mal escrita se ignora."""
+    f = {k: str(v or '').strip() for k, v in (filtros or {}).items()}
+    sql, params = ' WHERE 1=1', []
+    if f.get('estado'):
+        sql += ' AND s.estado = ?'
+        params.append(f['estado'])
+    # empresas y marcas son JSON (multi-selección); empresa y marca, los escalares legacy.
+    for lista, escalar in (('empresas', 'empresa'), ('marcas', 'marca')):
+        if f.get(escalar):
+            sql += f' AND (s.{lista} LIKE ? OR s.{escalar} = ?)'
+            params += [f'%{json.dumps(f[escalar], ensure_ascii=False)}%', f[escalar]]
+    if f.get('ubicacion'):
+        sql += ' AND s.ubicacion = ?'
+        params.append(f['ubicacion'])
+    if f.get('urgente') in ('1', 'true', 'si'):
+        sql += " AND s.criticidad = 'urgente'"
+    if _FECHA_ISO.match(f.get('desde', '')):
+        sql += ' AND date(s.created_at) >= date(?)'
+        params.append(f['desde'])
+    if _FECHA_ISO.match(f.get('hasta', '')):
+        sql += ' AND date(s.created_at) <= date(?)'
+        params.append(f['hasta'])
+    if f.get('q'):
+        sql += (' AND (s.proveedor_nombre LIKE ? OR s.cuit LIKE ? OR s.marca LIKE ? '
+                'OR s.factura_numero LIKE ? OR s.solicitado_por LIKE ? '
+                'OR s.empresa LIKE ? OR s.empresas LIKE ? '
+                'OR EXISTS (SELECT 1 FROM facturas f WHERE f.solicitud_id = s.id AND f.numero LIKE ?))')
+        params += [f'%{f["q"]}%'] * 8
+    return sql, params
+
+
+def listar(filtros=None, pagina=1, por_pagina=POR_PAGINA):
+    """Lista del inicio, filtrada y de a una página, de la más nueva a la más vieja
+    (`por_pagina=None` trae todas, para el Excel). Cada fila trae además `firmante` (a
+    quién espera: el firmante elegido; vacío en las viejas, que firma cualquier
+    habilitado), `firmado_por` y la última devolución o rechazo.
+    Devuelve {'solicitudes', 'total', 'pagina', 'por_pagina'}."""
+    donde, params = _donde(filtros)
+    try:
+        pagina = max(1, int(pagina or 1))
+    except (TypeError, ValueError):
+        pagina = 1
+    sql = f'SELECT {_COLUMNAS_LISTA} FROM solicitudes s{donde} ORDER BY s.id DESC'
+    paginado = list(params)
+    if por_pagina:
+        sql += ' LIMIT ? OFFSET ?'
+        paginado += [por_pagina, (pagina - 1) * por_pagina]
     conn = get_db()
     try:
-        sql = ('SELECT s.*, '
-               '(SELECT COUNT(*) FROM autorizaciones a WHERE a.solicitud_id = s.id) AS firmas, '
-               '(SELECT COUNT(*) FROM facturas f WHERE f.solicitud_id = s.id) AS facturas, '
-               "(SELECT group_concat(au.nombre, ', ') FROM autorizaciones a "
-               ' JOIN autorizados au ON au.id = a.autorizado_id WHERE a.solicitud_id = s.id) AS firmado_por, '
-               # La última devolución o rechazo: quién y por qué (se ve en la lista).
-               '(SELECT r.motivo FROM revisiones r WHERE r.solicitud_id = s.id '
-               ' ORDER BY r.id DESC LIMIT 1) AS revision_motivo, '
-               '(SELECT au.nombre FROM revisiones r JOIN autorizados au ON au.id = r.autorizado_id '
-               ' WHERE r.solicitud_id = s.id ORDER BY r.id DESC LIMIT 1) AS revision_por '
-               'FROM solicitudes s WHERE 1=1')
-        params = []
-        if estado:
-            sql += ' AND s.estado = ?'
-            params.append(estado)
-        if empresa:
-            # empresas es un JSON (multi-selección); empresa, el escalar legacy.
-            sql += ' AND (s.empresas LIKE ? OR s.empresa = ?)'
-            params += [f'%{json.dumps(empresa, ensure_ascii=False)}%', empresa]
-        if busqueda:
-            sql += (' AND (s.proveedor_nombre LIKE ? OR s.cuit LIKE ? OR s.marca LIKE ? '
-                    'OR s.factura_numero LIKE ? OR s.solicitado_por LIKE ? '
-                    'OR s.empresa LIKE ? OR s.empresas LIKE ? '
-                    'OR EXISTS (SELECT 1 FROM facturas f WHERE f.solicitud_id = s.id AND f.numero LIKE ?))')
-            params += [f'%{busqueda}%'] * 8
-        sql += ' ORDER BY s.id DESC'
+        total = conn.execute(f'SELECT COUNT(*) AS n FROM solicitudes s{donde}', params).fetchone()['n']
         nombres = {r['id']: r['nombre'] for r in conn.execute('SELECT id, nombre FROM autorizados')}
-        salida = []
-        for r in conn.execute(sql, params):
+        filas = []
+        for r in conn.execute(sql, paginado):
             d = _fila_a_dict(r)
             d['firmante'] = ', '.join(nombres[i] for i in ids_avisar_a(d) if i in nombres)
-            salida.append(d)
-        return salida
+            filas.append(d)
     finally:
         conn.close()
+    return {'solicitudes': filas, 'total': total, 'pagina': pagina, 'por_pagina': por_pagina}
 
 
 def para_firmar(autorizado_id):

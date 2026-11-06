@@ -3,6 +3,7 @@ import { LISTAS, fmtFechaHora, fmtImporte, fmtMoney, montoEnPesos } from '../con
 import {
   crearPago, eliminarPago, extraerFacturas, firmarPago, urlFactura,
 } from '../services/api.js'
+import { useVentana } from './Ventana.jsx'
 
 // Pagos imputados a una AGC autorizada. La AGC controla el presupuesto; cada pago se
 // firma como conformidad: cualquier habilitado, 1 firma dentro del tope y 2 si lo supera.
@@ -17,6 +18,7 @@ export default function SeccionPagos({ solicitud, onActualizar, pagoInicial }) {
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState('')
   const [firmando, setFirmando] = useState(null)   // { pagoId, autorizadoId, pin }
+  const { confirmar, ventana } = useVentana()
 
   const pagos = solicitud.pagos || []
   const r = solicitud.pagos_resumen || {}
@@ -91,7 +93,11 @@ export default function SeccionPagos({ solicitud, onActualizar, pagoInicial }) {
   }
 
   const borrar = async (pago) => {
-    if (!confirm(`¿Eliminar el pago "${pago.descripcion}"?`)) return
+    if (!(await confirmar({
+      titulo: `¿Eliminar el pago "${pago.descripcion}"?`,
+      mensaje: 'Se borra con sus facturas. No se puede deshacer.',
+      aceptar: 'Eliminar pago', peligro: true,
+    }))) return
     setError('')
     try {
       onActualizar(await eliminarPago(solicitud.id, pago.id))
@@ -102,6 +108,7 @@ export default function SeccionPagos({ solicitud, onActualizar, pagoInicial }) {
 
   return (
     <div className="card">
+      {ventana}
       <div className="card__title">💸 Pagos imputados a esta AGC</div>
       <div className="card__hint">
         La AGC controla el presupuesto; cada factura/pago se firma como conformidad de que

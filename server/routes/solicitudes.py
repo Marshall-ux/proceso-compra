@@ -7,6 +7,7 @@ from flask import Blueprint, jsonify, request, send_file
 from models.database import get_db
 from services import autopack
 from services import avisos
+from services import excel
 from services import ordenes_abiertas
 from services import pagos
 from services import proveedores
@@ -61,11 +62,25 @@ def _con_disponibles(solicitud):
     return solicitud
 
 
+def _filtros():
+    """Los filtros de la lista que vienen en el pedido (ver svc.FILTROS)."""
+    return {k: request.args.get(k) for k in svc.FILTROS}
+
+
 @bp.route('/solicitudes', methods=['GET'])
 def listar():
-    return jsonify(svc.listar(estado=request.args.get('estado'),
-                              busqueda=request.args.get('q'),
-                              empresa=request.args.get('empresa')))
+    """Lista del inicio, filtrada y de a una página (?pagina=N)."""
+    return jsonify(svc.listar(_filtros(), pagina=request.args.get('pagina', 1)))
+
+
+@bp.route('/solicitudes/excel', methods=['GET'])
+def lista_excel():
+    """La lista con los mismos filtros de la pantalla, toda (sin paginar), en Excel."""
+    filas = svc.listar(_filtros(), por_pagina=None)['solicitudes']
+    return send_file(excel.armar(filas),
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True,
+                     download_name=f'Solicitudes-{datetime.now().strftime("%Y-%m-%d")}.xlsx')
 
 
 @bp.route('/solicitudes/para-firmar', methods=['GET'])
