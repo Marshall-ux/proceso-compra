@@ -125,6 +125,8 @@ a { color: var(--green-dark); text-decoration: none; }
 }
 .encabezado__titulo { font-size: 1.9rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; margin-top: 0.4rem; }
 .encabezado__titulo span { color: var(--green); }
+.encabezado__marca { display: flex; align-items: center; gap: 1.1rem; }
+.encabezado__robot { width: 96px; height: 96px; flex-shrink: 0; border-radius: 50%; box-shadow: var(--shadow-sm); }
 
 /* Filtros de la lista. */
 .filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.6rem; margin-bottom: 1.1rem; }
@@ -579,4 +581,6 @@ table.data { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
   .para-firmar-item__monto { margin-left: auto; }
   .pin-box { flex-wrap: wrap; }
   .pin-box .field { flex-basis: 100%; }
+  .encabezado__robot { width: 64px; height: 64px; }
+  .encabezado__titulo { font-size: 1.5rem; }
 }

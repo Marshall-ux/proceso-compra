@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import PanelLote from '../components/PanelLote.jsx'
+import robot1x from '../assets/robot-96.png'
+import robot2x from '../assets/robot-192.png'
+import robot3x from '../assets/robot-288.png'
 import {
   EMPRESAS, LISTAS, MARCAS, UBICACIONES, esperaDesde, estadoDe, fmtFechaHora, fmtImporte,
 } from '../constants.js'
@@ -147,9 +150,17 @@ export default function HomePage() {
   return (
     <>
       <div className="encabezado">
-        <div>
-          <div className="hero__eyebrow">Neostar · Compras</div>
-          <h1 className="encabezado__titulo">Autorizaciones de <span>compra</span></h1>
+        <div className="encabezado__marca">
+          {/* El robot sale de un original de 1254 px reducido a la medida justa: el
+              navegador elige 1x, 2x o 3x según la pantalla y se ve nítido en todas. */}
+          <img
+            src={robot1x} srcSet={`${robot1x} 1x, ${robot2x} 2x, ${robot3x} 3x`}
+            width={96} height={96} alt="" className="encabezado__robot"
+          />
+          <div>
+            <div className="hero__eyebrow">Neostar · Compras</div>
+            <h1 className="encabezado__titulo">Autorizaciones de <span>compra</span></h1>
+          </div>
         </div>
         <button className="btn btn--primary" onClick={() => navigate('/nueva')}>
           + Nueva solicitud
