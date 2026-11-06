@@ -338,7 +338,7 @@ export default function HomePage() {
                            title="Elegir todas las de esta página" />
                   </th>
                   <th>#</th>
-                  <th>Fecha</th>
+                  <th title="Cuándo se cargó en la app: es la fecha que usa el filtro">Cargada</th>
                   <th>Proveedor</th>
                   <th>Marca</th>
                   <th className="num">Monto</th>
@@ -362,7 +362,12 @@ export default function HomePage() {
                       />
                     </td>
                     <td><strong>{s.id}</strong></td>
-                    <td>{s.fecha}</td>
+                    {/* La fecha de carga es la que filtra "Cargadas del … al …"; la de la
+                        factura va debajo para no confundirlas. */}
+                    <td title={fmtFechaHora(s.created_at)}>
+                      {fmtFechaHora(s.created_at).slice(0, 10)}
+                      {s.fecha && <div className="espera">Factura {s.fecha}</div>}
+                    </td>
                     <td>
                       {s.proveedor_nombre}
                       <div className="espera">
